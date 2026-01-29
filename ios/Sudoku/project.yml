@@ -1,0 +1,84 @@
+name: Sudoku
+options:
+  bundleIdPrefix: com.sudoku
+  deploymentTarget:
+    iOS: "16.0"
+  xcodeVersion: "15.0"
+  generateEmptyDirectories: true
+
+settings:
+  base:
+    SWIFT_VERSION: "5.9"
+    MARKETING_VERSION: "1.0.0"
+    CURRENT_PROJECT_VERSION: "1"
+    DEVELOPMENT_TEAM: ""
+    CODE_SIGN_STYLE: Automatic
+
+targets:
+  Sudoku:
+    type: application
+    platform: iOS
+    sources:
+      - Sudoku
+    settings:
+      base:
+        INFOPLIST_FILE: Sudoku/Info.plist
+        PRODUCT_BUNDLE_IDENTIFIER: com.sudoku.app
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        TARGETED_DEVICE_FAMILY: "1,2"
+        SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: true
+        IPHONEOS_DEPLOYMENT_TARGET: "16.0"
+        # Rust library linking
+        LIBRARY_SEARCH_PATHS:
+          - "$(inherited)"
+          - "$(PROJECT_DIR)/../Frameworks"
+        HEADER_SEARCH_PATHS:
+          - "$(inherited)"
+          - "$(PROJECT_DIR)/../Frameworks"
+        OTHER_LDFLAGS:
+          - "-lsudoku_ffi_sim"
+        SWIFT_INCLUDE_PATHS:
+          - "$(PROJECT_DIR)/../Frameworks"
+      configs:
+        Debug:
+          OTHER_LDFLAGS:
+            - "-lsudoku_ffi_sim"
+        Release:
+          OTHER_LDFLAGS:
+            - "-lsudoku_ffi_device"
+    entitlements:
+      path: Sudoku/Sudoku.entitlements
+      properties:
+        com.apple.developer.icloud-container-identifiers:
+          - iCloud.com.sudoku.app
+        com.apple.developer.icloud-services:
+          - CloudKit
+        com.apple.developer.game-center: true
+
+  SudokuTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - SudokuTests
+    dependencies:
+      - target: Sudoku
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.sudoku.app.tests
+
+schemes:
+  Sudoku:
+    build:
+      targets:
+        Sudoku: all
+    run:
+      config: Debug
+    test:
+      targets:
+        - SudokuTests
+    profile:
+      config: Release
+    analyze:
+      config: Debug
+    archive:
+      config: Release
