@@ -150,25 +150,6 @@ impl SudokuGame {
         })
     }
 
-    /// Create a game from a puzzle string (81 characters, 0 or . for empty)
-    #[uniffi::constructor]
-    pub fn from_string(puzzle: String) -> Option<Arc<Self>> {
-        let grid = Grid::from_string(&puzzle)?;
-        let solver = Solver::new();
-        let solution = solver.solve(&grid)?;
-        let difficulty = solver.rate_difficulty(&grid);
-
-        Some(Arc::new(Self {
-            grid: Mutex::new(grid),
-            solution: Mutex::new(solution),
-            difficulty: Mutex::new(difficulty),
-            undo_stack: Mutex::new(Vec::new()),
-            redo_stack: Mutex::new(Vec::new()),
-            hints_used: Mutex::new(0),
-            mistakes: Mutex::new(0),
-        }))
-    }
-
     /// Make a move: place a value at a position
     pub fn make_move(&self, row: u8, col: u8, value: u8) -> MoveResult {
         if value < 1 || value > 9 {
@@ -391,41 +372,147 @@ impl SudokuGame {
         .to_string()
     }
 
-    /// Deserialize a saved game state
-    #[uniffi::constructor]
-    pub fn deserialize(json: String) -> Option<Arc<Self>> {
-        let data: serde_json::Value = serde_json::from_str(&json).ok()?;
+    /// Get valid candidates for a cell (for ghost hints feature)
+    pub fn get_valid_candidates(&self, row: u8, col: u8) -> Vec<u8> {
+        let pos = Position::new(row as usize, col as usize);
+        let grid = self.grid.lock().unwrap();
+        grid.get_candidates(pos).iter().collect()
+    }
 
-        let puzzle_str = data["puzzle"].as_str()?;
-        let solution_str = data["solution"].as_str()?;
+    /// Check if a cell is a naked single (only one valid candidate)
+    pub fn is_naked_single(&self, row: u8, col: u8) -> bool {
+        let pos = Position::new(row as usize, col as usize);
+        let grid = self.grid.lock().unwrap();
+        let cell = grid.cell(pos);
+        if cell.is_given() || cell.is_filled() {
+            return false;
+        }
+        grid.get_candidates(pos).count() == 1
+    }
 
-        let grid = Grid::from_string(puzzle_str)?;
-        let solution = Grid::from_string(solution_str)?;
+    /// Fill candidates for a single cell with valid values
+    pub fn fill_cell_candidates(&self, row: u8, col: u8) -> bool {
+        let pos = Position::new(row as usize, col as usize);
+        let mut grid = self.grid.lock().unwrap();
+        let cell = grid.cell(pos);
+        if cell.is_given() || cell.is_filled() {
+            return false;
+        }
+        let valid = grid.get_candidates(pos);
+        grid.cell_mut(pos).set_candidates(valid);
+        true
+    }
 
-        let difficulty = match data["difficulty"].as_str()? {
-            "Beginner" => Difficulty::Beginner,
-            "Easy" => Difficulty::Easy,
-            "Medium" => Difficulty::Medium,
-            "Intermediate" => Difficulty::Intermediate,
-            "Hard" => Difficulty::Hard,
-            "Expert" => Difficulty::Expert,
-            "Master" => Difficulty::Master,
-            "Extreme" => Difficulty::Extreme,
-            _ => Difficulty::Medium,
+    /// Fill all empty cells with their valid candidates
+    pub fn fill_all_candidates(&self) {
+        let mut grid = self.grid.lock().unwrap();
+        grid.recalculate_candidates();
+    }
+
+    /// Clear candidates from a single cell
+    pub fn clear_cell_candidates(&self, row: u8, col: u8) -> bool {
+        let pos = Position::new(row as usize, col as usize);
+        let mut grid = self.grid.lock().unwrap();
+        let cell = grid.cell(pos);
+        if cell.is_given() || cell.is_filled() {
+            return false;
+        }
+        grid.cell_mut(pos).set_candidates(sudoku_core::BitSet::empty());
+        true
+    }
+
+    /// Clear all candidates from all cells
+    pub fn clear_all_candidates(&self) {
+        let mut grid = self.grid.lock().unwrap();
+        grid.clear_all_candidates();
+    }
+
+    /// Get the correct value for a cell (from solution)
+    pub fn get_solution_value(&self, row: u8, col: u8) -> u8 {
+        let pos = Position::new(row as usize, col as usize);
+        let solution = self.solution.lock().unwrap();
+        solution.get(pos).unwrap_or(0)
+    }
+
+    /// Check if the current value at a position is correct
+    pub fn is_value_correct(&self, row: u8, col: u8) -> bool {
+        let pos = Position::new(row as usize, col as usize);
+        let grid = self.grid.lock().unwrap();
+        let solution = self.solution.lock().unwrap();
+        grid.get(pos) == solution.get(pos)
+    }
+
+    /// Get count of remaining empty cells
+    pub fn get_empty_count(&self) -> u32 {
+        let grid = self.grid.lock().unwrap();
+        let mut count = 0u32;
+        for row in 0..9 {
+            for col in 0..9 {
+                if grid.get(Position::new(row, col)).is_none() {
+                    count += 1;
+                }
+            }
+        }
+        count
+    }
+
+    /// Get count of each number placed (for number completion indicator)
+    pub fn get_number_counts(&self) -> Vec<u8> {
+        let grid = self.grid.lock().unwrap();
+        let values = grid.values();
+        let mut counts = [0u8; 9];
+        for row in 0..9 {
+            for col in 0..9 {
+                if let Some(v) = values[row][col] {
+                    if v >= 1 && v <= 9 {
+                        counts[(v - 1) as usize] += 1;
+                    }
+                }
+            }
+        }
+        counts.to_vec()
+    }
+
+    /// Check if can undo
+    pub fn can_undo(&self) -> bool {
+        !self.undo_stack.lock().unwrap().is_empty()
+    }
+
+    /// Check if can redo
+    pub fn can_redo(&self) -> bool {
+        !self.redo_stack.lock().unwrap().is_empty()
+    }
+
+    /// Apply a hint automatically
+    pub fn apply_hint(&self) -> Option<GameHint> {
+        let hint = {
+            let grid = self.grid.lock().unwrap();
+            let solver = Solver::new();
+            solver.get_hint(&grid)?
         };
 
-        let hints_used = data["hints_used"].as_u64().unwrap_or(0) as usize;
-        let mistakes = data["mistakes"].as_u64().unwrap_or(0) as usize;
+        *self.hints_used.lock().unwrap() += 1;
 
-        Some(Arc::new(Self {
-            grid: Mutex::new(grid),
-            solution: Mutex::new(solution),
-            difficulty: Mutex::new(difficulty),
-            undo_stack: Mutex::new(Vec::new()),
-            redo_stack: Mutex::new(Vec::new()),
-            hints_used: Mutex::new(hints_used),
-            mistakes: Mutex::new(mistakes),
-        }))
+        match &hint.hint_type {
+            HintType::SetValue { pos, value } => {
+                let mut grid = self.grid.lock().unwrap();
+                let old_value = grid.get(*pos);
+                self.undo_stack.lock().unwrap().push((pos.row, pos.col, old_value));
+                self.redo_stack.lock().unwrap().clear();
+                grid.set_cell_unchecked(*pos, Some(*value));
+                grid.recalculate_candidates();
+            }
+            HintType::EliminateCandidates { pos, values } => {
+                let mut grid = self.grid.lock().unwrap();
+                for value in values {
+                    if grid.cell(*pos).has_candidate(*value) {
+                        grid.cell_mut(*pos).remove_candidate(*value);
+                    }
+                }
+            }
+        }
+
+        Some(hint.into())
     }
 }
 
@@ -458,4 +545,62 @@ impl SudokuGame {
 
         false
     }
+}
+
+// Free functions for creating games (UniFFI doesn't support associated functions that aren't constructors)
+
+/// Create a game from a puzzle string (81 characters, 0 or . for empty)
+#[uniffi::export]
+pub fn game_from_string(puzzle: String) -> Option<Arc<SudokuGame>> {
+    let grid = Grid::from_string(&puzzle)?;
+    let solver = Solver::new();
+    let solution = solver.solve(&grid)?;
+    let difficulty = solver.rate_difficulty(&grid);
+
+    Some(Arc::new(SudokuGame {
+        grid: Mutex::new(grid),
+        solution: Mutex::new(solution),
+        difficulty: Mutex::new(difficulty),
+        undo_stack: Mutex::new(Vec::new()),
+        redo_stack: Mutex::new(Vec::new()),
+        hints_used: Mutex::new(0),
+        mistakes: Mutex::new(0),
+    }))
+}
+
+/// Deserialize a saved game state
+#[uniffi::export]
+pub fn game_deserialize(json: String) -> Option<Arc<SudokuGame>> {
+    let data: serde_json::Value = serde_json::from_str(&json).ok()?;
+
+    let puzzle_str = data["puzzle"].as_str()?;
+    let solution_str = data["solution"].as_str()?;
+
+    let grid = Grid::from_string(puzzle_str)?;
+    let solution = Grid::from_string(solution_str)?;
+
+    let difficulty = match data["difficulty"].as_str()? {
+        "Beginner" => Difficulty::Beginner,
+        "Easy" => Difficulty::Easy,
+        "Medium" => Difficulty::Medium,
+        "Intermediate" => Difficulty::Intermediate,
+        "Hard" => Difficulty::Hard,
+        "Expert" => Difficulty::Expert,
+        "Master" => Difficulty::Master,
+        "Extreme" => Difficulty::Extreme,
+        _ => Difficulty::Medium,
+    };
+
+    let hints_used = data["hints_used"].as_u64().unwrap_or(0) as usize;
+    let mistakes = data["mistakes"].as_u64().unwrap_or(0) as usize;
+
+    Some(Arc::new(SudokuGame {
+        grid: Mutex::new(grid),
+        solution: Mutex::new(solution),
+        difficulty: Mutex::new(difficulty),
+        undo_stack: Mutex::new(Vec::new()),
+        redo_stack: Mutex::new(Vec::new()),
+        hints_used: Mutex::new(hints_used),
+        mistakes: Mutex::new(mistakes),
+    }))
 }

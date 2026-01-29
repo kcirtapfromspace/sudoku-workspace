@@ -1,0 +1,26 @@
+# Build artifacts
+Frameworks/*.a
+Frameworks/SudokuEngineFFI.h
+Frameworks/SudokuEngineFFI.modulemap
+Frameworks/module.modulemap
+
+# Generated bindings (rebuilt by build.sh)
+Sudoku/Sudoku/Generated/
+
+# Xcode
+*.xcuserstate
+*.xcuserdatad/
+DerivedData/
+build/
+*.moved-aside
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# CocoaPods
+Pods/
+Podfile.lock
+
+# Carthage
+Carthage/Build/
