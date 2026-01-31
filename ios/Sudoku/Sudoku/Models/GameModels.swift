@@ -62,6 +62,7 @@ struct GameStatistics: Codable {
     var bestTimes: [Difficulty: TimeInterval] = [:]
     var currentStreak: Int = 0
     var bestStreak: Int = 0
+    var sequentialCompletions: Int = 0  // Count of rows/cols/boxes filled in order 1-9
 
     var winRate: Double {
         guard gamesPlayed > 0 else { return 0 }
@@ -87,6 +88,10 @@ struct GameStatistics: Codable {
         totalPlayTime += time
         currentStreak = 0
     }
+
+    mutating func recordSequentialCompletion() {
+        sequentialCompletions += 1
+    }
 }
 
 // MARK: - Input Mode
@@ -94,16 +99,22 @@ struct GameStatistics: Codable {
 enum InputMode {
     case normal
     case candidate
+    case temporaryCandidate  // Long-press mode: reverts after one note entry
 
     var displayName: String {
         switch self {
         case .normal: return "Normal"
         case .candidate: return "Notes"
+        case .temporaryCandidate: return "Note (1x)"
         }
     }
 
     mutating func toggle() {
         self = self == .normal ? .candidate : .normal
+    }
+
+    var isNotesMode: Bool {
+        self == .candidate || self == .temporaryCandidate
     }
 }
 
@@ -146,9 +157,9 @@ struct GameSettings: Codable {
 
 enum CelebrationEvent: Equatable {
     case cellComplete(row: Int, col: Int)
-    case rowComplete(row: Int)
-    case columnComplete(col: Int)
-    case boxComplete(boxIndex: Int)
+    case rowComplete(row: Int, isSequential: Bool = false)
+    case columnComplete(col: Int, isSequential: Bool = false)
+    case boxComplete(boxIndex: Int, isSequential: Bool = false)
     case gameComplete
 }
 
