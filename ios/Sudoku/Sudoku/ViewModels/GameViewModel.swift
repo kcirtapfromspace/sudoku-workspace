@@ -18,6 +18,9 @@ class GameViewModel: ObservableObject {
     @Published private(set) var canRedo: Bool = false
     @Published private(set) var lastCelebration: CelebrationEvent?
 
+    /// Cells currently celebrating (for wiggle animation)
+    @Published var celebratingCells: Set<String> = []
+
     /// Controls whether auto-calculated candidates are displayed
     /// When false, only user-entered candidates (via Notes mode) are shown
     @Published private(set) var showCandidates: Bool = false
@@ -36,6 +39,16 @@ class GameViewModel: ObservableObject {
     private var completedRows: Set<Int> = []
     private var completedCols: Set<Int> = []
     private var completedBoxes: Set<Int> = []
+
+    // Track user-entered candidates separately from engine-calculated ones
+    private var userCandidates: [[Set<Int>]] = Array(repeating: Array(repeating: [], count: 9), count: 9)
+    private var usingAutoFill: Bool = false
+
+    // Track fill order for sequential completion detection
+    // For each row/col/box, track the order of values filled (excluding givens)
+    private var rowFillOrder: [Int: [Int]] = [:]
+    private var colFillOrder: [Int: [Int]] = [:]
+    private var boxFillOrder: [Int: [Int]] = [:]
 
     // MARK: - Computed Properties
 
@@ -117,8 +130,16 @@ class GameViewModel: ObservableObject {
         for state in cellStates {
             let row = Int(state.row)
             let col = Int(state.col)
-            // Only include candidates if showCandidates is enabled
-            let candidates = showCandidates ? Self.dataToSet(state.candidates) : []
+
+            // Use the correct candidate source based on whether we're using auto-fill
+            let candidates: Set<Int>
+            if usingAutoFill {
+                // When using auto-fill, show engine-calculated candidates
+                candidates = showCandidates ? Self.dataToSet(state.candidates) : []
+            } else {
+                // When not using auto-fill, show only user-entered candidates
+                candidates = userCandidates[row][col]
+            }
 
             let cell = CellModel(
                 row: row,
@@ -169,16 +190,31 @@ class GameViewModel: ObservableObject {
 
     // MARK: - Input
 
+    /// Store mode before temporary candidate mode was activated
+    private var modeBeforeTemporary: InputMode = .normal
+
     func enterNumber(_ number: Int) {
         guard let selected = selectedCell else { return }
         let cell = cells[selected.row][selected.col]
 
         if cell.isGiven { return }
 
-        if inputMode == .candidate {
+        if inputMode.isNotesMode {
             toggleCandidate(number, at: selected.row, col: selected.col)
+            // Revert from temporary mode after entering one note
+            if inputMode == .temporaryCandidate {
+                inputMode = modeBeforeTemporary
+            }
         } else {
             setValue(number, at: selected.row, col: selected.col)
+        }
+    }
+
+    /// Enter temporary candidate mode (for long-press)
+    func enterTemporaryNoteMode() {
+        if inputMode != .temporaryCandidate {
+            modeBeforeTemporary = inputMode
+            inputMode = .temporaryCandidate
         }
     }
 
@@ -187,31 +223,88 @@ class GameViewModel: ObservableObject {
 
         switch result {
         case .success:
+            // Clear user candidates for this cell since it now has a value
+            userCandidates[row][col] = []
+            // Track fill order for sequential detection
+            recordFillOrder(value: value, row: row, col: col)
             syncFromEngine()
-            checkForCompletions(afterPlacingAt: row, col: col)
+            checkForCompletions(afterPlacingAt: row, col: col, value: value)
         case .complete:
+            userCandidates[row][col] = []
+            recordFillOrder(value: value, row: row, col: col)
             syncFromEngine()
             lastCelebration = .gameComplete
         case .conflict:
+            userCandidates[row][col] = []
+            recordFillOrder(value: value, row: row, col: col)
             syncFromEngine()
         case .cannotModifyGiven, .invalidValue:
             break
         }
     }
 
+    /// Record the fill order for sequential completion detection
+    private func recordFillOrder(value: Int, row: Int, col: Int) {
+        // Track for row
+        if rowFillOrder[row] == nil {
+            rowFillOrder[row] = []
+        }
+        rowFillOrder[row]?.append(value)
+
+        // Track for column
+        if colFillOrder[col] == nil {
+            colFillOrder[col] = []
+        }
+        colFillOrder[col]?.append(value)
+
+        // Track for box
+        let boxIndex = (row / 3) * 3 + (col / 3)
+        if boxFillOrder[boxIndex] == nil {
+            boxFillOrder[boxIndex] = []
+        }
+        boxFillOrder[boxIndex]?.append(value)
+    }
+
+    /// Check if a fill order represents sequential filling (1,2,3... or ...7,8,9)
+    private func isSequentialFill(_ fillOrder: [Int]) -> Bool {
+        guard fillOrder.count >= 2 else { return false }
+
+        // Check ascending (1,2,3,...)
+        var isAscending = true
+        for i in 1..<fillOrder.count {
+            if fillOrder[i] != fillOrder[i-1] + 1 {
+                isAscending = false
+                break
+            }
+        }
+
+        // Check descending (...,3,2,1)
+        var isDescending = true
+        for i in 1..<fillOrder.count {
+            if fillOrder[i] != fillOrder[i-1] - 1 {
+                isDescending = false
+                break
+            }
+        }
+
+        return isAscending || isDescending
+    }
+
     /// Check if placing a value completed any row, column, or box
-    private func checkForCompletions(afterPlacingAt row: Int, col: Int) {
+    private func checkForCompletions(afterPlacingAt row: Int, col: Int, value: Int) {
         // Check row completion
         if !completedRows.contains(row) && isRowComplete(row) {
             completedRows.insert(row)
-            lastCelebration = .rowComplete(row: row)
+            let isSequential = isSequentialFill(rowFillOrder[row] ?? [])
+            lastCelebration = .rowComplete(row: row, isSequential: isSequential)
             return
         }
 
         // Check column completion
         if !completedCols.contains(col) && isColumnComplete(col) {
             completedCols.insert(col)
-            lastCelebration = .columnComplete(col: col)
+            let isSequential = isSequentialFill(colFillOrder[col] ?? [])
+            lastCelebration = .columnComplete(col: col, isSequential: isSequential)
             return
         }
 
@@ -219,7 +312,8 @@ class GameViewModel: ObservableObject {
         let boxIndex = (row / 3) * 3 + (col / 3)
         if !completedBoxes.contains(boxIndex) && isBoxComplete(boxIndex) {
             completedBoxes.insert(boxIndex)
-            lastCelebration = .boxComplete(boxIndex: boxIndex)
+            let isSequential = isSequentialFill(boxFillOrder[boxIndex] ?? [])
+            lastCelebration = .boxComplete(boxIndex: boxIndex, isSequential: isSequential)
             return
         }
     }
@@ -259,6 +353,39 @@ class GameViewModel: ObservableObject {
         lastCelebration = nil
     }
 
+    // MARK: - Celebration Helpers
+
+    func triggerRowCelebration(_ row: Int) {
+        for col in 0..<9 {
+            celebratingCells.insert("\(row)-\(col)")
+        }
+        autoClearCelebration(after: 0.6)
+    }
+
+    func triggerColumnCelebration(_ col: Int) {
+        for row in 0..<9 {
+            celebratingCells.insert("\(row)-\(col)")
+        }
+        autoClearCelebration(after: 0.6)
+    }
+
+    func triggerBoxCelebration(_ boxIndex: Int) {
+        let startRow = (boxIndex / 3) * 3
+        let startCol = (boxIndex % 3) * 3
+        for row in startRow..<startRow+3 {
+            for col in startCol..<startCol+3 {
+                celebratingCells.insert("\(row)-\(col)")
+            }
+        }
+        autoClearCelebration(after: 0.6)
+    }
+
+    private func autoClearCelebration(after delay: TimeInterval) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+            self?.celebratingCells.removeAll()
+        }
+    }
+
     func clearSelectedCell() {
         guard let selected = selectedCell else { return }
         let cell = cells[selected.row][selected.col]
@@ -281,6 +408,13 @@ class GameViewModel: ObservableObject {
         // Enable candidate display when user manually enters candidates
         showCandidates = true
 
+        // Toggle in local user tracking
+        if userCandidates[row][col].contains(value) {
+            userCandidates[row][col].remove(value)
+        } else {
+            userCandidates[row][col].insert(value)
+        }
+
         _ = game.toggleCandidate(row: UInt8(row), col: UInt8(col), value: UInt8(value))
         syncFromEngine()
     }
@@ -295,6 +429,7 @@ class GameViewModel: ObservableObject {
 
     func fillAllCandidates() {
         showCandidates = true
+        usingAutoFill = true
         game.fillAllCandidates()
         syncFromEngine()
     }
@@ -307,6 +442,9 @@ class GameViewModel: ObservableObject {
 
     func clearAllCandidates() {
         showCandidates = false
+        usingAutoFill = false
+        // Clear user-entered candidates as well
+        userCandidates = Array(repeating: Array(repeating: [], count: 9), count: 9)
         game.clearAllCandidates()
         syncFromEngine()
     }
@@ -314,6 +452,20 @@ class GameViewModel: ObservableObject {
     func getValidCandidates(row: Int, col: Int) -> Set<Int> {
         let data = game.getValidCandidates(row: UInt8(row), col: UInt8(col))
         return Self.dataToSet(data)
+    }
+
+    /// Remove invalid candidates (Check Notes feature)
+    /// Keeps only candidates that match the solution
+    func checkNotes() {
+        game.removeInvalidCandidates()
+        // Also update local user candidates to match
+        for row in 0..<9 {
+            for col in 0..<9 {
+                let validCandidates = Set(game.getCandidates(row: UInt8(row), col: UInt8(col)).map { Int($0) })
+                userCandidates[row][col] = userCandidates[row][col].intersection(validCandidates)
+            }
+        }
+        syncFromEngine()
     }
 
     // MARK: - Undo/Redo
@@ -382,6 +534,30 @@ class GameViewModel: ObservableObject {
 
     func isNakedSingle(row: Int, col: Int) -> Bool {
         return game.isNakedSingle(row: UInt8(row), col: UInt8(col))
+    }
+
+    // MARK: - Puzzle Fingerprint
+
+    /// Get the puzzle fingerprint (81-char string with givens as digits, empty as ".")
+    /// Used for identifying unique puzzles in the history
+    func getPuzzleFingerprint() -> String {
+        var result = ""
+        for row in 0..<9 {
+            for col in 0..<9 {
+                let cell = cells[row][col]
+                if cell.isGiven {
+                    result += "\(cell.value)"
+                } else {
+                    result += "."
+                }
+            }
+        }
+        return result
+    }
+
+    /// Get the puzzle hash for history tracking
+    var puzzleHash: String {
+        PuzzleRecord.generateHash(from: getPuzzleFingerprint())
     }
 
     // MARK: - Serialization

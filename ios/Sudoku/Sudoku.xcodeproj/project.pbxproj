@@ -13,7 +13,9 @@
 		1CEA4AD0F539A8F46F815EAC /* GameCenterManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7B70116407782179275FE99 /* GameCenterManager.swift */; };
 		2016B849A2DCBB7187F84DB8 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 336003ADD5BA9ED5B4FCBACE /* ContentView.swift */; };
 		20BF373D007D303C7EBB7BE7 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = E2B8111C142D1E948BAC29F9 /* Assets.xcassets */; };
+		24C83EF57C69F2E8557BD8C7 /* GameHistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6250D7B32A775F934DF31B82 /* GameHistoryView.swift */; };
 		2C6528C1F6B245F937841280 /* GridView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C655A4BF5C47359EC66D564 /* GridView.swift */; };
+		4CECE306A043227CB3C8D756 /* GameHistoryManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E48F51C8F39E07F64BDBCBE /* GameHistoryManager.swift */; };
 		5474199DD268AB4DF3A6D1A6 /* GameView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B98B31F0CE963EC1CD01AA8D /* GameView.swift */; };
 		5CBC1342779C18CFFAFE10CE /* SudokuTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A28959A14E32CB59282036E /* SudokuTests.swift */; };
 		8B6258CC4DD4621086F43E90 /* StatsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4996D6E89188CCEE2DDA0882 /* StatsView.swift */; };
@@ -25,6 +27,7 @@
 		B463F4C229827901EA86A192 /* SudokuApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE1F7E4A124E1E6523353A9A /* SudokuApp.swift */; };
 		B99C366A95303857F1451367 /* GameViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 736AF9623BB91E6B9ED3CBD2 /* GameViewModel.swift */; };
 		E3D566CB81AA0EC9502D4FAA /* PuzzleCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6699671B041E2B1C69B1DE3D /* PuzzleCache.swift */; };
+		EE711ADDBB80B24E8C434E8F /* GameHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1AC7D55AB62B5A336FC308A8 /* GameHistory.swift */; };
 		FF049CC7B162486907B6338F /* GameManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B778D4F8E525013FE40E3C47 /* GameManager.swift */; };
 		FFDAC89D9AE5F86EA0F1B996 /* NumberPadView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5845121794317A59FF4BEA24 /* NumberPadView.swift */; };
 /* End PBXBuildFile section */
@@ -50,14 +53,17 @@
 		0A28959A14E32CB59282036E /* SudokuTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SudokuTests.swift; sourceTree = "<group>"; };
 		0C8BE7A6682BAD9E51CA25A6 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		1566855F7D8EAA794CA447B0 /* SudokuEngineFFI.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = SudokuEngineFFI.h; sourceTree = "<group>"; };
+		1AC7D55AB62B5A336FC308A8 /* GameHistory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameHistory.swift; sourceTree = "<group>"; };
 		2154759A451DEA32F598DBF8 /* Sudoku.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Sudoku.entitlements; sourceTree = "<group>"; };
 		336003ADD5BA9ED5B4FCBACE /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		3B899CF657A96412F1220E34 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		3C888EF30EC69E5CCD23F685 /* SudokuEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SudokuEngine.swift; sourceTree = "<group>"; };
 		4996D6E89188CCEE2DDA0882 /* StatsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatsView.swift; sourceTree = "<group>"; };
+		4E48F51C8F39E07F64BDBCBE /* GameHistoryManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameHistoryManager.swift; sourceTree = "<group>"; };
 		556003B084CE300A72D65DBD /* CellView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CellView.swift; sourceTree = "<group>"; };
 		5845121794317A59FF4BEA24 /* NumberPadView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NumberPadView.swift; sourceTree = "<group>"; };
 		5F81857F69ADEC8F76D93DF3 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		6250D7B32A775F934DF31B82 /* GameHistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameHistoryView.swift; sourceTree = "<group>"; };
 		6699671B041E2B1C69B1DE3D /* PuzzleCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PuzzleCache.swift; sourceTree = "<group>"; };
 		6F2C5B087E1AB531087E0C3F /* SudokuUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = SudokuUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		72D2019C8C304B8C26519CC6 /* ScreenshotTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenshotTests.swift; sourceTree = "<group>"; };
@@ -115,6 +121,7 @@
 		7CDDE169D18B52660B5FF4EE /* Models */ = {
 			isa = PBXGroup;
 			children = (
+				1AC7D55AB62B5A336FC308A8 /* GameHistory.swift */,
 				BC9BD24D8389D483E341F48E /* GameModels.swift */,
 			);
 			path = Models;
@@ -143,6 +150,7 @@
 			isa = PBXGroup;
 			children = (
 				D7B70116407782179275FE99 /* GameCenterManager.swift */,
+				4E48F51C8F39E07F64BDBCBE /* GameHistoryManager.swift */,
 				B778D4F8E525013FE40E3C47 /* GameManager.swift */,
 				6699671B041E2B1C69B1DE3D /* PuzzleCache.swift */,
 			);
@@ -179,6 +187,7 @@
 			children = (
 				556003B084CE300A72D65DBD /* CellView.swift */,
 				336003ADD5BA9ED5B4FCBACE /* ContentView.swift */,
+				6250D7B32A775F934DF31B82 /* GameHistoryView.swift */,
 				B98B31F0CE963EC1CD01AA8D /* GameView.swift */,
 				7C655A4BF5C47359EC66D564 /* GridView.swift */,
 				D2CCF2001D26F435BD4F437E /* LoseScreenView.swift */,
@@ -338,6 +347,9 @@
 				A626DCB6ED68AED72A8CC9A3 /* CellView.swift in Sources */,
 				2016B849A2DCBB7187F84DB8 /* ContentView.swift in Sources */,
 				1CEA4AD0F539A8F46F815EAC /* GameCenterManager.swift in Sources */,
+				EE711ADDBB80B24E8C434E8F /* GameHistory.swift in Sources */,
+				4CECE306A043227CB3C8D756 /* GameHistoryManager.swift in Sources */,
+				24C83EF57C69F2E8557BD8C7 /* GameHistoryView.swift in Sources */,
 				FF049CC7B162486907B6338F /* GameManager.swift in Sources */,
 				8F58F1844AF9B1EC4DF04668 /* GameModels.swift in Sources */,
 				5474199DD268AB4DF3A6D1A6 /* GameView.swift in Sources */,

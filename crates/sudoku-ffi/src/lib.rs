@@ -427,6 +427,34 @@ impl SudokuGame {
         grid.clear_all_candidates();
     }
 
+    /// Remove invalid candidates - keep only candidates that match the solution
+    /// This is the "Check Notes" feature - removes wrong pencil marks
+    pub fn remove_invalid_candidates(&self) {
+        let mut grid = self.grid.lock().unwrap();
+        let solution = self.solution.lock().unwrap();
+
+        for row in 0..9 {
+            for col in 0..9 {
+                let pos = Position::new(row, col);
+                let cell = grid.cell(pos);
+                if cell.is_filled() || cell.is_given() {
+                    continue;
+                }
+
+                // Get the correct value for this cell
+                if let Some(correct) = solution.get(pos) {
+                    // Only keep the correct value as a candidate if it was already there
+                    if cell.has_candidate(correct) {
+                        grid.cell_mut(pos).set_candidates(sudoku_core::BitSet::single(correct));
+                    } else {
+                        // Cell had no candidates or didn't have the correct one
+                        grid.cell_mut(pos).set_candidates(sudoku_core::BitSet::empty());
+                    }
+                }
+            }
+        }
+    }
+
     /// Get the correct value for a cell (from solution)
     pub fn get_solution_value(&self, row: u8, col: u8) -> u8 {
         let pos = Position::new(row as usize, col as usize);

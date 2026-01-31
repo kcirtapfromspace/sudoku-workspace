@@ -10,6 +10,9 @@ struct GridView: View {
     private var thickLineWidth: CGFloat { 2 }
     private var thinLineWidth: CGFloat { 0.5 }
 
+    // Track wiggle animation state per cell
+    @State private var wiggleProgress: [String: CGFloat] = [:]
+
     var body: some View {
         ZStack {
             // Background
@@ -32,9 +35,20 @@ struct GridView: View {
                                 showErrors: forceShowErrors || gameManager.settings.showErrorsImmediately,
                                 size: cellSize
                             )
+                            .modifier(WiggleModifier(
+                                isCelebrating: game.celebratingCells.contains("\(row)-\(col)"),
+                                progress: wiggleProgress["\(row)-\(col)"] ?? 0
+                            ))
+                            .contentShape(Rectangle())
                             .onTapGesture {
                                 game.selectCell(row: row, col: col)
                                 hapticFeedback(.light)
+                            }
+                            .onLongPressGesture(minimumDuration: 0.5) {
+                                // Long press enters temporary note mode
+                                game.selectCell(row: row, col: col)
+                                game.enterTemporaryNoteMode()
+                                hapticFeedback(.medium)
                             }
                         }
                     }
@@ -49,11 +63,46 @@ struct GridView: View {
         .clipShape(RoundedRectangle(cornerRadius: 4))
         .shadow(color: .black.opacity(0.1), radius: 8, x: 0, y: 4)
         .accessibilityIdentifier("SudokuGrid")
+        .onChange(of: game.celebratingCells) { newCells in
+            // Start wiggle animation for newly celebrating cells
+            for cellKey in newCells {
+                wiggleProgress[cellKey] = 0
+                withAnimation(.easeOut(duration: 0.5)) {
+                    wiggleProgress[cellKey] = 1
+                }
+            }
+        }
     }
 
     private func hapticFeedback(_ style: UIImpactFeedbackGenerator.FeedbackStyle) {
         guard gameManager.settings.hapticsEnabled else { return }
         UIImpactFeedbackGenerator(style: style).impactOccurred()
+    }
+}
+
+// MARK: - Wiggle Modifier
+
+struct WiggleModifier: ViewModifier {
+    let isCelebrating: Bool
+    let progress: CGFloat
+
+    func body(content: Content) -> some View {
+        content
+            .modifier(WiggleEffect(progress: isCelebrating ? progress : 0))
+    }
+}
+
+struct WiggleEffect: GeometryEffect {
+    var progress: CGFloat
+
+    var animatableData: CGFloat {
+        get { progress }
+        set { progress = newValue }
+    }
+
+    func effectValue(size: CGSize) -> ProjectionTransform {
+        let shake = sin(progress * .pi * 6) * 4 * (1 - progress)
+        return ProjectionTransform(CGAffineTransform(translationX: shake, y: 0))
     }
 }
 
