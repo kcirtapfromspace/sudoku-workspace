@@ -70,6 +70,10 @@ class GameManager: ObservableObject {
             gameState = .playing
             saveCurrentGame()
 
+            // Record puzzle in history
+            let fingerprint = game.getPuzzleFingerprint()
+            GameHistoryManager.shared.recordPuzzleStart(puzzleString: fingerprint, difficulty: difficulty)
+
             // Prefetch puzzles for nearby difficulties during gameplay
             prefetchNearbyDifficulties(current: difficulty)
         }
@@ -124,6 +128,13 @@ class GameManager: ObservableObject {
             statistics.recordLoss(time: time)
             gameState = .lost
         }
+
+        // Record result in history
+        GameHistoryManager.shared.recordResult(
+            puzzleHash: game.puzzleHash,
+            won: won,
+            time: won ? time : nil
+        )
 
         saveStatistics()
         clearSavedGame()

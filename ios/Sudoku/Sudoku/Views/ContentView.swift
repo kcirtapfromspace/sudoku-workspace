@@ -72,6 +72,7 @@ struct MenuView: View {
     @State private var showingDifficultyPicker = false
     @State private var showingSettings = false
     @State private var showingStats = false
+    @State private var showingHistory = false
 
     var body: some View {
         NavigationStack {
@@ -119,7 +120,7 @@ struct MenuView: View {
                 Spacer()
 
                 // Bottom buttons
-                HStack(spacing: 30) {
+                HStack(spacing: 24) {
                     Button {
                         showingStats = true
                     } label: {
@@ -131,6 +132,18 @@ struct MenuView: View {
                         }
                     }
                     .accessibilityIdentifier("Stats")
+
+                    Button {
+                        showingHistory = true
+                    } label: {
+                        VStack {
+                            Image(systemName: "book.fill")
+                                .font(.title2)
+                            Text("Library")
+                                .font(.caption)
+                        }
+                    }
+                    .accessibilityIdentifier("Library")
 
                     Button {
                         GameCenterManager.shared.showGameCenter()
@@ -170,6 +183,9 @@ struct MenuView: View {
             }
             .sheet(isPresented: $showingStats) {
                 StatsView()
+            }
+            .sheet(isPresented: $showingHistory) {
+                GameHistoryView()
             }
         }
     }

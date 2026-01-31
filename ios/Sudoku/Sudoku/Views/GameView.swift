@@ -116,13 +116,36 @@ struct GameView: View {
         }
 
         switch event {
-        case .rowComplete(let row):
-            celebrationText = "🎉 Row \(row + 1) Complete!"
-        case .columnComplete(let col):
-            celebrationText = "🎉 Column \(col + 1) Complete!"
-        case .boxComplete(let box):
-            celebrationText = "🎉 Box \(box + 1) Complete!"
+        case .rowComplete(let row, let isSequential):
+            // Use subtle wiggle instead of overlay
+            game.triggerRowCelebration(row)
+            // Stronger haptic for sequential completion
+            hapticFeedback(isSequential ? .medium : .light)
+            if isSequential {
+                gameManager.statistics.recordSequentialCompletion()
+            }
+            game.clearCelebration()
+            return
+        case .columnComplete(let col, let isSequential):
+            // Use subtle wiggle instead of overlay
+            game.triggerColumnCelebration(col)
+            hapticFeedback(isSequential ? .medium : .light)
+            if isSequential {
+                gameManager.statistics.recordSequentialCompletion()
+            }
+            game.clearCelebration()
+            return
+        case .boxComplete(let box, let isSequential):
+            // Use subtle wiggle instead of overlay
+            game.triggerBoxCelebration(box)
+            hapticFeedback(isSequential ? .medium : .light)
+            if isSequential {
+                gameManager.statistics.recordSequentialCompletion()
+            }
+            game.clearCelebration()
+            return
         case .gameComplete:
+            // Keep the overlay only for game completion
             celebrationText = "🏆 PUZZLE SOLVED! 🏆"
         case .cellComplete:
             // Don't show celebration for individual cells
@@ -147,8 +170,8 @@ struct GameView: View {
     // MARK: - Konami Code
 
     private var konamiGesture: some Gesture {
-        // Detect swipe directions
-        DragGesture(minimumDistance: 30)
+        // Detect swipe directions (minimumDistance set high to reduce tap interference)
+        DragGesture(minimumDistance: 50)
             .onEnded { gesture in
                 let horizontal = gesture.translation.width
                 let vertical = gesture.translation.height
@@ -352,6 +375,15 @@ struct GameView: View {
                 } label: {
                     Label("Clear All Notes", systemImage: "square.grid.3x3")
                 }
+
+                Divider()
+
+                Button {
+                    game.checkNotes()
+                    hapticFeedback(.medium)
+                } label: {
+                    Label("Check Notes", systemImage: "checkmark.circle")
+                }
             } label: {
                 Image(systemName: "note.text")
             }
@@ -455,6 +487,7 @@ struct ShakeEffect: GeometryEffect {
         return ProjectionTransform(CGAffineTransform(translationX: translation, y: 0))
     }
 }
+
 
 #Preview {
     GameView(game: GameViewModel(difficulty: .medium))
