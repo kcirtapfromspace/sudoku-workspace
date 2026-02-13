@@ -726,6 +726,10 @@ impl GameState {
     pub fn difficulty(&self) -> Difficulty {
         self.difficulty
     }
+    pub fn se_rating(&self) -> f32 {
+        let solver = Solver::new();
+        solver.rate_se(&self.puzzle)
+    }
     pub fn mistakes(&self) -> usize {
         self.mistakes
     }

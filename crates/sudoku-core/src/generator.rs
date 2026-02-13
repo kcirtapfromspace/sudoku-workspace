@@ -32,6 +32,10 @@ pub struct GeneratorConfig {
     pub min_givens: usize,
     /// Maximum number of givens
     pub max_givens: usize,
+    /// Optional minimum SE rating (Sudoku Explainer scale)
+    pub min_se_rating: Option<f32>,
+    /// Optional maximum SE rating (Sudoku Explainer scale)
+    pub max_se_rating: Option<f32>,
 }
 
 impl Default for GeneratorConfig {
@@ -42,6 +46,8 @@ impl Default for GeneratorConfig {
             max_attempts: 100,
             min_givens: 22,
             max_givens: 35,
+            min_se_rating: None,
+            max_se_rating: None,
         }
     }
 }
@@ -54,6 +60,8 @@ impl GeneratorConfig {
             max_attempts: 30,
             min_givens: 45,
             max_givens: 55,
+            min_se_rating: None,
+            max_se_rating: None,
         }
     }
 
@@ -64,6 +72,8 @@ impl GeneratorConfig {
             max_attempts: 50,
             min_givens: 36,
             max_givens: 45,
+            min_se_rating: None,
+            max_se_rating: None,
         }
     }
 
@@ -74,6 +84,8 @@ impl GeneratorConfig {
             max_attempts: 100,
             min_givens: 32,
             max_givens: 38,
+            min_se_rating: None,
+            max_se_rating: None,
         }
     }
 
@@ -84,6 +96,8 @@ impl GeneratorConfig {
             max_attempts: 150,
             min_givens: 28,
             max_givens: 34,
+            min_se_rating: None,
+            max_se_rating: None,
         }
     }
 
@@ -94,6 +108,8 @@ impl GeneratorConfig {
             max_attempts: 200,
             min_givens: 24,
             max_givens: 30,
+            min_se_rating: None,
+            max_se_rating: None,
         }
     }
 
@@ -104,6 +120,8 @@ impl GeneratorConfig {
             max_attempts: 500,
             min_givens: 22,
             max_givens: 26,
+            min_se_rating: None,
+            max_se_rating: None,
         }
     }
 
@@ -114,6 +132,8 @@ impl GeneratorConfig {
             max_attempts: 1000,
             min_givens: 20,
             max_givens: 24,
+            min_se_rating: None,
+            max_se_rating: None,
         }
     }
 
@@ -124,6 +144,8 @@ impl GeneratorConfig {
             max_attempts: 2000,
             min_givens: 17,
             max_givens: 22,
+            min_se_rating: None,
+            max_se_rating: None,
         }
     }
 }
@@ -200,6 +222,20 @@ impl Generator {
             if self.difficulty_acceptable(actual_difficulty) {
                 let given_count = grid.given_count();
                 if given_count >= self.config.min_givens && given_count <= self.config.max_givens {
+                    // Check optional SE rating range
+                    if self.config.min_se_rating.is_some() || self.config.max_se_rating.is_some() {
+                        let se = solver.rate_se(&grid);
+                        if let Some(min) = self.config.min_se_rating {
+                            if se < min {
+                                continue;
+                            }
+                        }
+                        if let Some(max) = self.config.max_se_rating {
+                            if se > max {
+                                continue;
+                            }
+                        }
+                    }
                     return grid;
                 }
             }

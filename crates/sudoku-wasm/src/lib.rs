@@ -222,6 +222,12 @@ impl SudokuGame {
         format!("{}", self.state.difficulty())
     }
 
+    /// Get Sudoku Explainer (SE) numerical rating for the current puzzle
+    #[wasm_bindgen]
+    pub fn se_rating(&self) -> f32 {
+        self.state.se_rating()
+    }
+
     /// Get number of mistakes
     #[wasm_bindgen]
     pub fn mistakes(&self) -> usize {

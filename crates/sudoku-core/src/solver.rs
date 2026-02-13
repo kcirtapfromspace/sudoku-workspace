@@ -21,10 +21,10 @@ impl Difficulty {
             Difficulty::Beginner => Technique::NakedSingle,
             Difficulty::Easy => Technique::NakedSingle,
             Difficulty::Medium => Technique::HiddenSingle,
-            Difficulty::Intermediate => Technique::NakedTriple,
+            Difficulty::Intermediate => Technique::HiddenTriple,
             Difficulty::Hard => Technique::BoxLineReduction,
-            Difficulty::Expert => Technique::XWing,
-            Difficulty::Master => Technique::XYWing,
+            Difficulty::Expert => Technique::FinnedJellyfish,
+            Difficulty::Master => Technique::AIC,
             Difficulty::Extreme => Technique::Backtracking,
         }
     }
@@ -93,21 +93,58 @@ pub enum Technique {
     PointingPair,
     BoxLineReduction,
 
-    // Expert
+    // Expert (fish family)
     XWing,
+    FinnedXWing,
     Swordfish,
+    FinnedSwordfish,
     Jellyfish,
+    FinnedJellyfish,
 
-    // Master
+    // Master (wings + chains)
     XYWing,
     XYZWing,
     WWing,
-    SimpleColoring,
     XChain,
+    AIC,
 
     // Extreme
+    AlsXz,
+    AlsXyWing,
     UniqueRectangle,
     Backtracking,
+}
+
+impl Technique {
+    /// Get the Sudoku Explainer (SE) numerical rating for this technique.
+    /// This is the community-standard difficulty scale.
+    pub fn se_rating(&self) -> f32 {
+        match self {
+            Technique::HiddenSingle => 1.5,
+            Technique::NakedSingle => 2.3,
+            Technique::PointingPair => 2.6,
+            Technique::BoxLineReduction => 2.8,
+            Technique::NakedPair => 3.0,
+            Technique::XWing => 3.2,
+            Technique::FinnedXWing => 3.4,
+            Technique::HiddenPair => 3.4,
+            Technique::NakedTriple => 3.6,
+            Technique::Swordfish => 3.8,
+            Technique::HiddenTriple => 3.8,
+            Technique::FinnedSwordfish => 4.0,
+            Technique::XYWing => 4.2,
+            Technique::XYZWing => 4.4,
+            Technique::WWing => 4.4,
+            Technique::XChain => 4.5,
+            Technique::UniqueRectangle => 4.6,
+            Technique::Jellyfish => 5.2,
+            Technique::FinnedJellyfish => 5.4,
+            Technique::AlsXz => 5.5,
+            Technique::AIC => 6.0,
+            Technique::AlsXyWing => 7.0,
+            Technique::Backtracking => 9.0,
+        }
+    }
 }
 
 impl std::fmt::Display for Technique {
@@ -122,13 +159,18 @@ impl std::fmt::Display for Technique {
             Technique::PointingPair => write!(f, "Pointing Pair"),
             Technique::BoxLineReduction => write!(f, "Box/Line Reduction"),
             Technique::XWing => write!(f, "X-Wing"),
+            Technique::FinnedXWing => write!(f, "Finned X-Wing"),
             Technique::Swordfish => write!(f, "Swordfish"),
+            Technique::FinnedSwordfish => write!(f, "Finned Swordfish"),
             Technique::Jellyfish => write!(f, "Jellyfish"),
+            Technique::FinnedJellyfish => write!(f, "Finned Jellyfish"),
             Technique::XYWing => write!(f, "XY-Wing"),
             Technique::XYZWing => write!(f, "XYZ-Wing"),
             Technique::WWing => write!(f, "W-Wing"),
-            Technique::SimpleColoring => write!(f, "Simple Coloring"),
             Technique::XChain => write!(f, "X-Chain"),
+            Technique::AIC => write!(f, "AIC"),
+            Technique::AlsXz => write!(f, "ALS-XZ"),
+            Technique::AlsXyWing => write!(f, "ALS-XY-Wing"),
             Technique::UniqueRectangle => write!(f, "Unique Rectangle"),
             Technique::Backtracking => write!(f, "Backtracking"),
         }
@@ -247,13 +289,40 @@ impl Solver {
         if let Some(hint) = self.find_x_wing(&working) {
             return Some(hint);
         }
+        if let Some(hint) = self.find_finned_x_wing(&working) {
+            return Some(hint);
+        }
         if let Some(hint) = self.find_swordfish(&working) {
+            return Some(hint);
+        }
+        if let Some(hint) = self.find_finned_swordfish(&working) {
+            return Some(hint);
+        }
+        if let Some(hint) = self.find_jellyfish(&working) {
+            return Some(hint);
+        }
+        if let Some(hint) = self.find_finned_jellyfish(&working) {
             return Some(hint);
         }
         if let Some(hint) = self.find_xy_wing(&working) {
             return Some(hint);
         }
-        if let Some(hint) = self.find_simple_coloring(&working) {
+        if let Some(hint) = self.find_xyz_wing(&working) {
+            return Some(hint);
+        }
+        if let Some(hint) = self.find_w_wing(&working) {
+            return Some(hint);
+        }
+        if let Some(hint) = self.find_x_chain(&working) {
+            return Some(hint);
+        }
+        if let Some(hint) = self.find_aic(&working) {
+            return Some(hint);
+        }
+        if let Some(hint) = self.find_als_xz(&working) {
+            return Some(hint);
+        }
+        if let Some(hint) = self.find_als_xy_wing(&working) {
             return Some(hint);
         }
 
@@ -281,129 +350,69 @@ impl Solver {
 
     /// Rate the difficulty of a puzzle
     pub fn rate_difficulty(&self, grid: &Grid) -> Difficulty {
-        let mut working = grid.deep_clone();
-        working.recalculate_candidates();
-
-        let mut max_technique = Technique::NakedSingle;
         let empty_count = grid.empty_positions().len();
+        let mut working = grid.deep_clone();
+        let max_tech = self.solve_with_techniques(&mut working);
+        Self::technique_to_difficulty(max_tech, empty_count)
+    }
 
-        while !working.is_complete() {
-            // Try techniques in order
-            if self.apply_naked_singles(&mut working) {
-                continue;
-            }
+    /// Rate the puzzle using the Sudoku Explainer (SE) numerical scale.
+    /// Returns the SE rating of the hardest technique needed to solve the puzzle.
+    pub fn rate_se(&self, grid: &Grid) -> f32 {
+        let mut working = grid.deep_clone();
+        let max_tech = self.solve_with_techniques(&mut working);
+        max_tech.se_rating()
+    }
 
-            if self.apply_hidden_singles(&mut working) {
-                if max_technique < Technique::HiddenSingle {
-                    max_technique = Technique::HiddenSingle;
+    /// Solve the puzzle using human techniques, returning the hardest technique used.
+    /// If backtracking is needed, returns `Technique::Backtracking`.
+    fn solve_with_techniques(&self, grid: &mut Grid) -> Technique {
+        grid.recalculate_candidates();
+        let mut max_technique = Technique::NakedSingle;
+
+        macro_rules! try_technique {
+            ($apply:ident, $tech:expr) => {
+                if self.$apply(grid) {
+                    if max_technique < $tech {
+                        max_technique = $tech;
+                    }
+                    continue;
                 }
-                continue;
-            }
-
-            if self.apply_naked_pairs(&mut working) {
-                if max_technique < Technique::NakedPair {
-                    max_technique = Technique::NakedPair;
-                }
-                continue;
-            }
-
-            if self.apply_hidden_pairs(&mut working) {
-                if max_technique < Technique::HiddenPair {
-                    max_technique = Technique::HiddenPair;
-                }
-                continue;
-            }
-
-            if self.apply_naked_triples(&mut working) {
-                if max_technique < Technique::NakedTriple {
-                    max_technique = Technique::NakedTriple;
-                }
-                continue;
-            }
-
-            if self.apply_hidden_triples(&mut working) {
-                if max_technique < Technique::HiddenTriple {
-                    max_technique = Technique::HiddenTriple;
-                }
-                continue;
-            }
-
-            if self.apply_pointing_pairs(&mut working) {
-                if max_technique < Technique::PointingPair {
-                    max_technique = Technique::PointingPair;
-                }
-                continue;
-            }
-
-            if self.apply_box_line_reduction(&mut working) {
-                if max_technique < Technique::BoxLineReduction {
-                    max_technique = Technique::BoxLineReduction;
-                }
-                continue;
-            }
-
-            if self.apply_x_wing(&mut working) {
-                if max_technique < Technique::XWing {
-                    max_technique = Technique::XWing;
-                }
-                continue;
-            }
-
-            if self.apply_swordfish(&mut working) {
-                if max_technique < Technique::Swordfish {
-                    max_technique = Technique::Swordfish;
-                }
-                continue;
-            }
-
-            if self.apply_jellyfish(&mut working) {
-                if max_technique < Technique::Jellyfish {
-                    max_technique = Technique::Jellyfish;
-                }
-                continue;
-            }
-
-            if self.apply_xy_wing(&mut working) {
-                if max_technique < Technique::XYWing {
-                    max_technique = Technique::XYWing;
-                }
-                continue;
-            }
-
-            if self.apply_xyz_wing(&mut working) {
-                if max_technique < Technique::XYZWing {
-                    max_technique = Technique::XYZWing;
-                }
-                continue;
-            }
-
-            if self.apply_w_wing(&mut working) {
-                if max_technique < Technique::WWing {
-                    max_technique = Technique::WWing;
-                }
-                continue;
-            }
-
-            if self.apply_simple_coloring(&mut working) {
-                if max_technique < Technique::SimpleColoring {
-                    max_technique = Technique::SimpleColoring;
-                }
-                continue;
-            }
-
-            if self.apply_unique_rectangle(&mut working) {
-                if max_technique < Technique::UniqueRectangle {
-                    max_technique = Technique::UniqueRectangle;
-                }
-                continue;
-            }
-
-            // Need backtracking - extreme difficulty
-            return Difficulty::Extreme;
+            };
         }
 
-        // Determine difficulty based on technique and puzzle characteristics
-        match max_technique {
+        while !grid.is_complete() {
+            try_technique!(apply_naked_singles, Technique::NakedSingle);
+            try_technique!(apply_hidden_singles, Technique::HiddenSingle);
+            try_technique!(apply_naked_pairs, Technique::NakedPair);
+            try_technique!(apply_hidden_pairs, Technique::HiddenPair);
+            try_technique!(apply_naked_triples, Technique::NakedTriple);
+            try_technique!(apply_hidden_triples, Technique::HiddenTriple);
+            try_technique!(apply_pointing_pairs, Technique::PointingPair);
+            try_technique!(apply_box_line_reduction, Technique::BoxLineReduction);
+            try_technique!(apply_x_wing, Technique::XWing);
+            try_technique!(apply_finned_x_wing, Technique::FinnedXWing);
+            try_technique!(apply_swordfish, Technique::Swordfish);
+            try_technique!(apply_finned_swordfish, Technique::FinnedSwordfish);
+            try_technique!(apply_jellyfish, Technique::Jellyfish);
+            try_technique!(apply_finned_jellyfish, Technique::FinnedJellyfish);
+            try_technique!(apply_xy_wing, Technique::XYWing);
+            try_technique!(apply_xyz_wing, Technique::XYZWing);
+            try_technique!(apply_w_wing, Technique::WWing);
+            try_technique!(apply_x_chain, Technique::XChain);
+            try_technique!(apply_aic, Technique::AIC);
+            try_technique!(apply_als_xz, Technique::AlsXz);
+            try_technique!(apply_als_xy_wing, Technique::AlsXyWing);
+            try_technique!(apply_unique_rectangle, Technique::UniqueRectangle);
+            return Technique::Backtracking;
+        }
+
+        max_technique
+    }
+
+    /// Map a technique + puzzle characteristics to a difficulty level
+    fn technique_to_difficulty(tech: Technique, empty_count: usize) -> Difficulty {
+        match tech {
             Technique::NakedSingle => {
                 if empty_count <= 35 {
                     Difficulty::Beginner
@@ -417,13 +426,21 @@ impl Solver {
             | Technique::NakedTriple
             | Technique::HiddenTriple => Difficulty::Intermediate,
             Technique::PointingPair | Technique::BoxLineReduction => Difficulty::Hard,
-            Technique::XWing | Technique::Swordfish | Technique::Jellyfish => Difficulty::Expert,
+            Technique::XWing
+            | Technique::FinnedXWing
+            | Technique::Swordfish
+            | Technique::FinnedSwordfish
+            | Technique::Jellyfish
+            | Technique::FinnedJellyfish => Difficulty::Expert,
             Technique::XYWing
             | Technique::XYZWing
             | Technique::WWing
-            | Technique::SimpleColoring
-            | Technique::XChain => Difficulty::Master,
-            _ => Difficulty::Extreme,
+            | Technique::XChain
+            | Technique::AIC => Difficulty::Master,
+            Technique::AlsXz
+            | Technique::AlsXyWing
+            | Technique::UniqueRectangle
+            | Technique::Backtracking => Difficulty::Extreme,
         }
     }
 
@@ -1405,11 +1422,10 @@ impl Solver {
 
     // ==================== Jellyfish (4x4 Fish) ====================
 
-    fn apply_jellyfish(&self, grid: &mut Grid) -> bool {
+    fn find_jellyfish(&self, grid: &Grid) -> Option<Hint> {
         for value in 1..=9u8 {
             // Row-based Jellyfish
             let mut row_data: Vec<(usize, Vec<usize>)> = Vec::new();
-
             for row in 0..9 {
                 let cols: Vec<usize> = (0..9)
                     .filter(|&col| {
@@ -1417,13 +1433,10 @@ impl Solver {
                         grid.cell(pos).is_empty() && grid.get_candidates(pos).contains(value)
                     })
                     .collect();
-
                 if cols.len() >= 2 && cols.len() <= 4 {
                     row_data.push((row, cols));
                 }
             }
-
-            // Find 4 rows where the union of columns is exactly 4
             for i in 0..row_data.len() {
                 for j in (i + 1)..row_data.len() {
                     for k in (j + 1)..row_data.len() {
@@ -1435,12 +1448,8 @@ impl Solver {
                             all_cols.extend(&row_data[l].1);
                             all_cols.sort();
                             all_cols.dedup();
-
                             if all_cols.len() == 4 {
-                                let rows =
-                                    [row_data[i].0, row_data[j].0, row_data[k].0, row_data[l].0];
-                                let mut eliminated = false;
-
+                                let rows = [row_data[i].0, row_data[j].0, row_data[k].0, row_data[l].0];
                                 for &col in &all_cols {
                                     for row in 0..9 {
                                         if !rows.contains(&row) {
@@ -1448,20 +1457,97 @@ impl Solver {
                                             if grid.cell(pos).is_empty()
                                                 && grid.get_candidates(pos).contains(value)
                                             {
-                                                grid.cell_mut(pos).remove_candidate(value);
-                                                eliminated = true;
+                                                return Some(Hint {
+                                                    technique: Technique::Jellyfish,
+                                                    hint_type: HintType::EliminateCandidates {
+                                                        pos,
+                                                        values: vec![value],
+                                                    },
+                                                    explanation: format!(
+                                                        "Jellyfish on {} in rows {:?}, columns {:?}.",
+                                                        value,
+                                                        rows.iter().map(|r| r + 1).collect::<Vec<_>>(),
+                                                        all_cols.iter().map(|c| c + 1).collect::<Vec<_>>()
+                                                    ),
+                                                    involved_cells: vec![],
+                                                });
                                             }
                                         }
                                     }
-                                }
-
-                                if eliminated {
-                                    return true;
                                 }
                             }
                         }
                     }
                 }
+            }
+
+            // Column-based Jellyfish
+            let mut col_data: Vec<(usize, Vec<usize>)> = Vec::new();
+            for col in 0..9 {
+                let rows: Vec<usize> = (0..9)
+                    .filter(|&row| {
+                        let pos = Position::new(row, col);
+                        grid.cell(pos).is_empty() && grid.get_candidates(pos).contains(value)
+                    })
+                    .collect();
+                if rows.len() >= 2 && rows.len() <= 4 {
+                    col_data.push((col, rows));
+                }
+            }
+            for i in 0..col_data.len() {
+                for j in (i + 1)..col_data.len() {
+                    for k in (j + 1)..col_data.len() {
+                        for l in (k + 1)..col_data.len() {
+                            let mut all_rows: Vec<usize> = Vec::new();
+                            all_rows.extend(&col_data[i].1);
+                            all_rows.extend(&col_data[j].1);
+                            all_rows.extend(&col_data[k].1);
+                            all_rows.extend(&col_data[l].1);
+                            all_rows.sort();
+                            all_rows.dedup();
+                            if all_rows.len() == 4 {
+                                let cols = [col_data[i].0, col_data[j].0, col_data[k].0, col_data[l].0];
+                                for &row in &all_rows {
+                                    for col in 0..9 {
+                                        if !cols.contains(&col) {
+                                            let pos = Position::new(row, col);
+                                            if grid.cell(pos).is_empty()
+                                                && grid.get_candidates(pos).contains(value)
+                                            {
+                                                return Some(Hint {
+                                                    technique: Technique::Jellyfish,
+                                                    hint_type: HintType::EliminateCandidates {
+                                                        pos,
+                                                        values: vec![value],
+                                                    },
+                                                    explanation: format!(
+                                                        "Jellyfish on {} in columns {:?}, rows {:?}.",
+                                                        value,
+                                                        cols.iter().map(|c| c + 1).collect::<Vec<_>>(),
+                                                        all_rows.iter().map(|r| r + 1).collect::<Vec<_>>()
+                                                    ),
+                                                    involved_cells: vec![],
+                                                });
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    fn apply_jellyfish(&self, grid: &mut Grid) -> bool {
+        if let Some(hint) = self.find_jellyfish(grid) {
+            if let HintType::EliminateCandidates { pos, values } = hint.hint_type {
+                for value in values {
+                    grid.cell_mut(pos).remove_candidate(value);
+                }
+                return true;
             }
         }
         false
@@ -1564,8 +1650,7 @@ impl Solver {
 
     // ==================== XYZ-Wing ====================
 
-    fn apply_xyz_wing(&self, grid: &mut Grid) -> bool {
-        // Find pivot cells with exactly 3 candidates
+    fn find_xyz_wing(&self, grid: &Grid) -> Option<Hint> {
         for pivot in grid.empty_positions() {
             let pivot_cand = grid.get_candidates(pivot);
             if pivot_cand.count() != 3 {
@@ -1574,7 +1659,6 @@ impl Solver {
 
             let xyz: Vec<u8> = pivot_cand.iter().collect();
 
-            // Find two wing cells that see the pivot, each with 2 candidates that are subsets of pivot
             let wings: Vec<Position> = grid
                 .empty_positions()
                 .into_iter()
@@ -1586,7 +1670,6 @@ impl Solver {
                     if cand.count() != 2 {
                         return false;
                     }
-                    // Check if wing candidates are subset of pivot
                     cand.iter().all(|v| pivot_cand.contains(v))
                 })
                 .collect();
@@ -1599,13 +1682,11 @@ impl Solver {
                     let cand1 = grid.get_candidates(wing1);
                     let cand2 = grid.get_candidates(wing2);
 
-                    // The union of wing candidates should be all 3 pivot values
                     let wing_union = cand1.union(&cand2);
                     if wing_union.count() != 3 {
                         continue;
                     }
 
-                    // Find the common value (z) that appears in both wings
                     let common: Vec<u8> = xyz
                         .iter()
                         .filter(|&&v| cand1.contains(v) && cand2.contains(v))
@@ -1618,7 +1699,6 @@ impl Solver {
 
                     let z = common[0];
 
-                    // Eliminate z from cells that see all three (pivot and both wings)
                     for pos in grid.empty_positions() {
                         if pos != pivot
                             && pos != wing1
@@ -1628,11 +1708,35 @@ impl Solver {
                             && self.sees(pos, wing2)
                             && grid.get_candidates(pos).contains(z)
                         {
-                            grid.cell_mut(pos).remove_candidate(z);
-                            return true;
+                            return Some(Hint {
+                                technique: Technique::XYZWing,
+                                hint_type: HintType::EliminateCandidates {
+                                    pos,
+                                    values: vec![z],
+                                },
+                                explanation: format!(
+                                    "XYZ-Wing: pivot ({}, {}) with {:?}, wings at ({}, {}) and ({}, {}). Remove {} from cells seeing all three.",
+                                    pivot.row + 1, pivot.col + 1, xyz,
+                                    wing1.row + 1, wing1.col + 1,
+                                    wing2.row + 1, wing2.col + 1, z
+                                ),
+                                involved_cells: vec![pivot, wing1, wing2],
+                            });
                         }
                     }
                 }
+            }
+        }
+        None
+    }
+
+    fn apply_xyz_wing(&self, grid: &mut Grid) -> bool {
+        if let Some(hint) = self.find_xyz_wing(grid) {
+            if let HintType::EliminateCandidates { pos, values } = hint.hint_type {
+                for value in values {
+                    grid.cell_mut(pos).remove_candidate(value);
+                }
+                return true;
             }
         }
         false
@@ -1640,8 +1744,7 @@ impl Solver {
 
     // ==================== W-Wing ====================
 
-    fn apply_w_wing(&self, grid: &mut Grid) -> bool {
-        // Find bi-value cells with same two candidates
+    fn find_w_wing(&self, grid: &Grid) -> Option<Hint> {
         let bivalues: Vec<(Position, u8, u8)> = grid
             .empty_positions()
             .into_iter()
@@ -1661,16 +1764,12 @@ impl Solver {
                 let (pos1, a1, b1) = bivalues[i];
                 let (pos2, a2, b2) = bivalues[j];
 
-                // Must have same candidates
                 if !((a1 == a2 && b1 == b2) || (a1 == b2 && b1 == a2)) {
                     continue;
                 }
 
                 let x = a1;
                 let y = b1;
-
-                // Check if there's a strong link on either x or y connecting them
-                // Strong link: only 2 places for a value in a row/column
 
                 // Check rows for strong link
                 for row in 0..9 {
@@ -1686,14 +1785,11 @@ impl Solver {
                         if positions_in_row.len() == 2 {
                             let link1 = Position::new(row, positions_in_row[0]);
                             let link2 = Position::new(row, positions_in_row[1]);
-
-                            // Check if pos1 sees link1 and pos2 sees link2 (or vice versa)
                             let other_value = if value == x { y } else { x };
 
                             if (self.sees(pos1, link1) && self.sees(pos2, link2))
                                 || (self.sees(pos1, link2) && self.sees(pos2, link1))
                             {
-                                // W-Wing found! Eliminate other_value from cells seeing both pos1 and pos2
                                 for pos in grid.empty_positions() {
                                     if pos != pos1
                                         && pos != pos2
@@ -1701,8 +1797,20 @@ impl Solver {
                                         && self.sees(pos, pos2)
                                         && grid.get_candidates(pos).contains(other_value)
                                     {
-                                        grid.cell_mut(pos).remove_candidate(other_value);
-                                        return true;
+                                        return Some(Hint {
+                                            technique: Technique::WWing,
+                                            hint_type: HintType::EliminateCandidates {
+                                                pos,
+                                                values: vec![other_value],
+                                            },
+                                            explanation: format!(
+                                                "W-Wing: cells ({}, {}) and ({}, {}) with {{{}, {}}}, strong link on {} in row {}. Remove {}.",
+                                                pos1.row + 1, pos1.col + 1,
+                                                pos2.row + 1, pos2.col + 1,
+                                                x, y, value, row + 1, other_value
+                                            ),
+                                            involved_cells: vec![pos1, pos2, link1, link2],
+                                        });
                                     }
                                 }
                             }
@@ -1724,7 +1832,6 @@ impl Solver {
                         if positions_in_col.len() == 2 {
                             let link1 = Position::new(positions_in_col[0], col);
                             let link2 = Position::new(positions_in_col[1], col);
-
                             let other_value = if value == x { y } else { x };
 
                             if (self.sees(pos1, link1) && self.sees(pos2, link2))
@@ -1737,8 +1844,20 @@ impl Solver {
                                         && self.sees(pos, pos2)
                                         && grid.get_candidates(pos).contains(other_value)
                                     {
-                                        grid.cell_mut(pos).remove_candidate(other_value);
-                                        return true;
+                                        return Some(Hint {
+                                            technique: Technique::WWing,
+                                            hint_type: HintType::EliminateCandidates {
+                                                pos,
+                                                values: vec![other_value],
+                                            },
+                                            explanation: format!(
+                                                "W-Wing: cells ({}, {}) and ({}, {}) with {{{}, {}}}, strong link on {} in col {}. Remove {}.",
+                                                pos1.row + 1, pos1.col + 1,
+                                                pos2.row + 1, pos2.col + 1,
+                                                x, y, value, col + 1, other_value
+                                            ),
+                                            involved_cells: vec![pos1, pos2, link1, link2],
+                                        });
                                     }
                                 }
                             }
@@ -1747,177 +1866,908 @@ impl Solver {
                 }
             }
         }
+        None
+    }
+
+    fn apply_w_wing(&self, grid: &mut Grid) -> bool {
+        if let Some(hint) = self.find_w_wing(grid) {
+            if let HintType::EliminateCandidates { pos, values } = hint.hint_type {
+                for value in values {
+                    grid.cell_mut(pos).remove_candidate(value);
+                }
+                return true;
+            }
+        }
         false
     }
 
-    // ==================== Simple Coloring ====================
+    // ==================== Finned Fish ====================
 
-    fn find_simple_coloring(&self, grid: &Grid) -> Option<Hint> {
+    fn find_finned_fish_generic(
+        &self,
+        grid: &Grid,
+        size: usize,
+        technique: Technique,
+    ) -> Option<Hint> {
+        let name = match size {
+            2 => "Finned X-Wing",
+            3 => "Finned Swordfish",
+            _ => "Finned Jellyfish",
+        };
+
         for value in 1..=9u8 {
-            // Build conjugate pairs (strong links) for this value
-            let mut links: Vec<(Position, Position)> = Vec::new();
-
-            // Row conjugates
+            // Row-based finned fish
+            let mut row_data: Vec<(usize, Vec<usize>)> = Vec::new();
             for row in 0..9 {
-                let positions: Vec<Position> = (0..9)
-                    .map(|col| Position::new(row, col))
-                    .filter(|&pos| {
+                let cols: Vec<usize> = (0..9)
+                    .filter(|&col| {
+                        let pos = Position::new(row, col);
                         grid.cell(pos).is_empty() && grid.get_candidates(pos).contains(value)
                     })
                     .collect();
-                if positions.len() == 2 {
-                    links.push((positions[0], positions[1]));
+                if cols.len() >= 2 && cols.len() <= size + 2 {
+                    row_data.push((row, cols));
                 }
             }
 
-            // Column conjugates
+            if row_data.len() >= size {
+                let indices: Vec<usize> = (0..row_data.len()).collect();
+                for combo in Self::combinations(&indices, size) {
+                    // Try each row in the combo as the fin row
+                    for fin_idx in 0..size {
+                        let base_indices: Vec<usize> = (0..size).filter(|&i| i != fin_idx).collect();
+
+                        // Collect columns from base rows
+                        let mut cover_cols: Vec<usize> = Vec::new();
+                        let mut base_ok = true;
+                        for &bi in &base_indices {
+                            for &col in &row_data[combo[bi]].1 {
+                                if !cover_cols.contains(&col) {
+                                    cover_cols.push(col);
+                                }
+                            }
+                        }
+                        cover_cols.sort();
+
+                        if cover_cols.len() != size {
+                            continue;
+                        }
+
+                        // Check base rows have candidates only in cover columns
+                        for &bi in &base_indices {
+                            if !row_data[combo[bi]].1.iter().all(|c| cover_cols.contains(c)) {
+                                base_ok = false;
+                                break;
+                            }
+                        }
+                        if !base_ok {
+                            continue;
+                        }
+
+                        // Fin row: some candidates in cover cols, extras are the fin
+                        let fin_row_idx = combo[fin_idx];
+                        let fin_row = row_data[fin_row_idx].0;
+                        let fin_cols: Vec<usize> = row_data[fin_row_idx]
+                            .1
+                            .iter()
+                            .filter(|c| !cover_cols.contains(c))
+                            .copied()
+                            .collect();
+
+                        if fin_cols.is_empty() {
+                            continue; // No fin = regular fish, not finned
+                        }
+
+                        // Check candidates in cover cols exist in fin row
+                        let has_cover = row_data[fin_row_idx].1.iter().any(|c| cover_cols.contains(c));
+                        if !has_cover {
+                            continue;
+                        }
+
+                        // All fin cells must share one box
+                        let fin_positions: Vec<Position> = fin_cols
+                            .iter()
+                            .map(|&c| Position::new(fin_row, c))
+                            .collect();
+                        let fin_box = fin_positions[0].box_index();
+                        if !fin_positions.iter().all(|p| p.box_index() == fin_box) {
+                            continue;
+                        }
+
+                        // Eliminate from cells in cover columns AND fin box, not in any defining row
+                        let defining_rows: Vec<usize> = combo.iter().map(|&i| row_data[i].0).collect();
+                        for &col in &cover_cols {
+                            for row in 0..9 {
+                                if defining_rows.contains(&row) {
+                                    continue;
+                                }
+                                let pos = Position::new(row, col);
+                                if pos.box_index() == fin_box
+                                    && grid.cell(pos).is_empty()
+                                    && grid.get_candidates(pos).contains(value)
+                                {
+                                    return Some(Hint {
+                                        technique,
+                                        hint_type: HintType::EliminateCandidates {
+                                            pos,
+                                            values: vec![value],
+                                        },
+                                        explanation: format!(
+                                            "{} on {} in rows {:?}, cover cols {:?}, fin at row {} box {}.",
+                                            name, value,
+                                            defining_rows.iter().map(|r| r + 1).collect::<Vec<_>>(),
+                                            cover_cols.iter().map(|c| c + 1).collect::<Vec<_>>(),
+                                            fin_row + 1, fin_box + 1
+                                        ),
+                                        involved_cells: vec![],
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Column-based finned fish
+            let mut col_data: Vec<(usize, Vec<usize>)> = Vec::new();
             for col in 0..9 {
-                let positions: Vec<Position> = (0..9)
-                    .map(|row| Position::new(row, col))
-                    .filter(|&pos| {
+                let rows: Vec<usize> = (0..9)
+                    .filter(|&row| {
+                        let pos = Position::new(row, col);
                         grid.cell(pos).is_empty() && grid.get_candidates(pos).contains(value)
                     })
                     .collect();
-                if positions.len() == 2 {
-                    links.push((positions[0], positions[1]));
+                if rows.len() >= 2 && rows.len() <= size + 2 {
+                    col_data.push((col, rows));
                 }
             }
 
-            // Box conjugates
-            for box_idx in 0..9 {
-                let positions: Vec<Position> = Self::box_positions(box_idx)
-                    .into_iter()
-                    .filter(|&pos| {
-                        grid.cell(pos).is_empty() && grid.get_candidates(pos).contains(value)
-                    })
-                    .collect();
-                if positions.len() == 2 {
-                    links.push((positions[0], positions[1]));
-                }
-            }
+            if col_data.len() >= size {
+                let indices: Vec<usize> = (0..col_data.len()).collect();
+                for combo in Self::combinations(&indices, size) {
+                    for fin_idx in 0..size {
+                        let base_indices: Vec<usize> = (0..size).filter(|&i| i != fin_idx).collect();
 
-            if links.is_empty() {
-                continue;
-            }
+                        let mut cover_rows: Vec<usize> = Vec::new();
+                        let mut base_ok = true;
+                        for &bi in &base_indices {
+                            for &row in &col_data[combo[bi]].1 {
+                                if !cover_rows.contains(&row) {
+                                    cover_rows.push(row);
+                                }
+                            }
+                        }
+                        cover_rows.sort();
 
-            // Build connected chains using colors (true/false)
-            let mut colors: std::collections::HashMap<Position, bool> =
-                std::collections::HashMap::new();
+                        if cover_rows.len() != size {
+                            continue;
+                        }
 
-            // Start from first link
-            let mut to_process: Vec<(Position, bool)> =
-                vec![(links[0].0, true), (links[0].1, false)];
+                        for &bi in &base_indices {
+                            if !col_data[combo[bi]].1.iter().all(|r| cover_rows.contains(r)) {
+                                base_ok = false;
+                                break;
+                            }
+                        }
+                        if !base_ok {
+                            continue;
+                        }
 
-            while let Some((pos, color)) = to_process.pop() {
-                if colors.contains_key(&pos) {
-                    continue;
-                }
-                colors.insert(pos, color);
+                        let fin_col_idx = combo[fin_idx];
+                        let fin_col = col_data[fin_col_idx].0;
+                        let fin_rows: Vec<usize> = col_data[fin_col_idx]
+                            .1
+                            .iter()
+                            .filter(|r| !cover_rows.contains(r))
+                            .copied()
+                            .collect();
 
-                // Find connected positions through links
-                for &(p1, p2) in &links {
-                    if p1 == pos && !colors.contains_key(&p2) {
-                        to_process.push((p2, !color));
-                    } else if p2 == pos && !colors.contains_key(&p1) {
-                        to_process.push((p1, !color));
-                    }
-                }
-            }
+                        if fin_rows.is_empty() {
+                            continue;
+                        }
 
-            if colors.len() < 2 {
-                continue;
-            }
+                        let has_cover = col_data[fin_col_idx].1.iter().any(|r| cover_rows.contains(r));
+                        if !has_cover {
+                            continue;
+                        }
 
-            // Rule 2: If two cells of the same color see each other, that color is false
-            let true_cells: Vec<Position> = colors
-                .iter()
-                .filter(|&(_, &c)| c)
-                .map(|(&p, _)| p)
-                .collect();
-            let false_cells: Vec<Position> = colors
-                .iter()
-                .filter(|&(_, &c)| !c)
-                .map(|(&p, _)| p)
-                .collect();
+                        let fin_positions: Vec<Position> = fin_rows
+                            .iter()
+                            .map(|&r| Position::new(r, fin_col))
+                            .collect();
+                        let fin_box = fin_positions[0].box_index();
+                        if !fin_positions.iter().all(|p| p.box_index() == fin_box) {
+                            continue;
+                        }
 
-            // Check if same-colored cells see each other
-            for i in 0..true_cells.len() {
-                for j in (i + 1)..true_cells.len() {
-                    if self.sees(true_cells[i], true_cells[j]) {
-                        // True color is invalid, eliminate from all true cells
-                        for &pos in &true_cells {
-                            if grid.get_candidates(pos).contains(value) {
-                                return Some(Hint {
-                                    technique: Technique::SimpleColoring,
-                                    hint_type: HintType::EliminateCandidates {
-                                        pos,
-                                        values: vec![value],
-                                    },
-                                    explanation: format!(
-                                        "Simple Coloring: two cells of same color see each other, eliminating {} from that color group.",
-                                        value
-                                    ),
-                                    involved_cells: true_cells.clone(),
-                                });
+                        let defining_cols: Vec<usize> = combo.iter().map(|&i| col_data[i].0).collect();
+                        for &row in &cover_rows {
+                            for col in 0..9 {
+                                if defining_cols.contains(&col) {
+                                    continue;
+                                }
+                                let pos = Position::new(row, col);
+                                if pos.box_index() == fin_box
+                                    && grid.cell(pos).is_empty()
+                                    && grid.get_candidates(pos).contains(value)
+                                {
+                                    return Some(Hint {
+                                        technique,
+                                        hint_type: HintType::EliminateCandidates {
+                                            pos,
+                                            values: vec![value],
+                                        },
+                                        explanation: format!(
+                                            "{} on {} in cols {:?}, cover rows {:?}, fin at col {} box {}.",
+                                            name, value,
+                                            defining_cols.iter().map(|c| c + 1).collect::<Vec<_>>(),
+                                            cover_rows.iter().map(|r| r + 1).collect::<Vec<_>>(),
+                                            fin_col + 1, fin_box + 1
+                                        ),
+                                        involved_cells: vec![],
+                                    });
+                                }
                             }
                         }
                     }
-                }
-            }
-
-            for i in 0..false_cells.len() {
-                for j in (i + 1)..false_cells.len() {
-                    if self.sees(false_cells[i], false_cells[j]) {
-                        for &pos in &false_cells {
-                            if grid.get_candidates(pos).contains(value) {
-                                return Some(Hint {
-                                    technique: Technique::SimpleColoring,
-                                    hint_type: HintType::EliminateCandidates {
-                                        pos,
-                                        values: vec![value],
-                                    },
-                                    explanation: format!(
-                                        "Simple Coloring: two cells of same color see each other, eliminating {} from that color group.",
-                                        value
-                                    ),
-                                    involved_cells: false_cells.clone(),
-                                });
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Rule 4: Eliminate from cells that see both colors
-            for pos in grid.empty_positions() {
-                if colors.contains_key(&pos) || !grid.get_candidates(pos).contains(value) {
-                    continue;
-                }
-
-                let sees_true = true_cells.iter().any(|&p| self.sees(pos, p));
-                let sees_false = false_cells.iter().any(|&p| self.sees(pos, p));
-
-                if sees_true && sees_false {
-                    return Some(Hint {
-                        technique: Technique::SimpleColoring,
-                        hint_type: HintType::EliminateCandidates {
-                            pos,
-                            values: vec![value],
-                        },
-                        explanation: format!(
-                            "Simple Coloring: cell ({}, {}) sees both colors, so {} can be eliminated.",
-                            pos.row + 1, pos.col + 1, value
-                        ),
-                        involved_cells: colors.keys().copied().collect(),
-                    });
                 }
             }
         }
         None
     }
 
-    fn apply_simple_coloring(&self, grid: &mut Grid) -> bool {
-        if let Some(hint) = self.find_simple_coloring(grid) {
+    fn find_finned_x_wing(&self, grid: &Grid) -> Option<Hint> {
+        self.find_finned_fish_generic(grid, 2, Technique::FinnedXWing)
+    }
+
+    fn apply_finned_x_wing(&self, grid: &mut Grid) -> bool {
+        if let Some(hint) = self.find_finned_x_wing(grid) {
+            if let HintType::EliminateCandidates { pos, values } = hint.hint_type {
+                for value in values {
+                    grid.cell_mut(pos).remove_candidate(value);
+                }
+                return true;
+            }
+        }
+        false
+    }
+
+    fn find_finned_swordfish(&self, grid: &Grid) -> Option<Hint> {
+        self.find_finned_fish_generic(grid, 3, Technique::FinnedSwordfish)
+    }
+
+    fn apply_finned_swordfish(&self, grid: &mut Grid) -> bool {
+        if let Some(hint) = self.find_finned_swordfish(grid) {
+            if let HintType::EliminateCandidates { pos, values } = hint.hint_type {
+                for value in values {
+                    grid.cell_mut(pos).remove_candidate(value);
+                }
+                return true;
+            }
+        }
+        false
+    }
+
+    fn find_finned_jellyfish(&self, grid: &Grid) -> Option<Hint> {
+        self.find_finned_fish_generic(grid, 4, Technique::FinnedJellyfish)
+    }
+
+    fn apply_finned_jellyfish(&self, grid: &mut Grid) -> bool {
+        if let Some(hint) = self.find_finned_jellyfish(grid) {
+            if let HintType::EliminateCandidates { pos, values } = hint.hint_type {
+                for value in values {
+                    grid.cell_mut(pos).remove_candidate(value);
+                }
+                return true;
+            }
+        }
+        false
+    }
+
+    // ==================== AIC Framework (X-Chain + AIC) ====================
+
+    /// Build a link graph for the AIC engine.
+    fn build_link_graph(
+        grid: &Grid,
+    ) -> (
+        std::collections::HashMap<(Position, u8), Vec<(Position, u8)>>,
+        std::collections::HashMap<(Position, u8), Vec<(Position, u8)>>,
+    ) {
+        type Node = (Position, u8);
+        let mut strong: std::collections::HashMap<Node, Vec<Node>> = std::collections::HashMap::new();
+        let mut weak: std::collections::HashMap<Node, Vec<Node>> = std::collections::HashMap::new();
+
+        // Helper: collect empty cells with a given value in a unit
+        let units: Vec<Vec<Position>> = {
+            let mut u = Vec::with_capacity(27);
+            for i in 0..9 {
+                u.push(Self::row_positions(i));
+                u.push(Self::col_positions(i));
+                u.push(Self::box_positions(i));
+            }
+            u
+        };
+
+        // Strong links from conjugate pairs (exactly 2 cells for a value in a unit)
+        for unit in &units {
+            for value in 1..=9u8 {
+                let cells: Vec<Position> = unit
+                    .iter()
+                    .filter(|&&p| grid.cell(p).is_empty() && grid.get_candidates(p).contains(value))
+                    .copied()
+                    .collect();
+
+                if cells.len() == 2 {
+                    let a = (cells[0], value);
+                    let b = (cells[1], value);
+                    strong.entry(a).or_default().push(b);
+                    strong.entry(b).or_default().push(a);
+                    // Strong links are also weak links
+                    weak.entry(a).or_default().push(b);
+                    weak.entry(b).or_default().push(a);
+                }
+
+                // Weak links: same value in same unit with >2 occurrences
+                if cells.len() > 2 {
+                    for i in 0..cells.len() {
+                        for j in (i + 1)..cells.len() {
+                            let a = (cells[i], value);
+                            let b = (cells[j], value);
+                            weak.entry(a).or_default().push(b);
+                            weak.entry(b).or_default().push(a);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Strong links from bivalue cells
+        for pos in grid.empty_positions() {
+            let cand = grid.get_candidates(pos);
+            if cand.count() == 2 {
+                let vals: Vec<u8> = cand.iter().collect();
+                let a = (pos, vals[0]);
+                let b = (pos, vals[1]);
+                strong.entry(a).or_default().push(b);
+                strong.entry(b).or_default().push(a);
+                weak.entry(a).or_default().push(b);
+                weak.entry(b).or_default().push(a);
+            }
+            // Weak links: different values in same cell
+            let vals: Vec<u8> = cand.iter().collect();
+            for i in 0..vals.len() {
+                for j in (i + 1)..vals.len() {
+                    let a = (pos, vals[i]);
+                    let b = (pos, vals[j]);
+                    weak.entry(a).or_default().push(b);
+                    weak.entry(b).or_default().push(a);
+                }
+            }
+        }
+
+        // Deduplicate
+        for list in strong.values_mut() {
+            list.sort_by(|a, b| (a.0.row, a.0.col, a.1).cmp(&(b.0.row, b.0.col, b.1)));
+            list.dedup();
+        }
+        for list in weak.values_mut() {
+            list.sort_by(|a, b| (a.0.row, a.0.col, a.1).cmp(&(b.0.row, b.0.col, b.1)));
+            list.dedup();
+        }
+
+        (strong, weak)
+    }
+
+    /// Search for AIC chains. If `single_value_only` is true, only finds single-digit chains (X-Chain).
+    fn find_aic_with_filter(&self, grid: &Grid, single_value_only: bool) -> Option<Hint> {
+        let (strong, weak) = Self::build_link_graph(grid);
+        const MAX_AIC_LENGTH: usize = 12;
+
+        type Node = (Position, u8);
+
+        // BFS state: (current_node, arrived_via_strong, chain)
+        let all_nodes: Vec<Node> = strong.keys().copied().collect();
+
+        for &start in &all_nodes {
+            // BFS from start, alternating strong/weak
+            // We start by looking for strong links from start
+            let mut queue: std::collections::VecDeque<(Node, bool, Vec<Node>)> =
+                std::collections::VecDeque::new();
+            let mut visited: std::collections::HashSet<(Node, bool)> =
+                std::collections::HashSet::new();
+
+            // Initial: we need to traverse a strong link first
+            if let Some(neighbors) = strong.get(&start) {
+                for &next in neighbors {
+                    if single_value_only && next.1 != start.1 {
+                        continue;
+                    }
+                    let chain = vec![start, next];
+                    queue.push_back((next, true, chain));
+                }
+            }
+
+            while let Some((current, arrived_strong, chain)) = queue.pop_front() {
+                if chain.len() > MAX_AIC_LENGTH {
+                    continue;
+                }
+
+                let key = (current, arrived_strong);
+                if visited.contains(&key) {
+                    continue;
+                }
+                visited.insert(key);
+
+                // Next step alternates: if arrived via strong, follow weak; if arrived via weak, follow strong
+                if arrived_strong {
+                    // Follow weak links
+                    if let Some(neighbors) = weak.get(&current) {
+                        for &next in neighbors {
+                            if chain.contains(&next) && next != start {
+                                continue;
+                            }
+                            if single_value_only && next.1 != start.1 {
+                                continue;
+                            }
+
+                            // Check for elimination: chain ends with a weak link back to... we need the chain to close or produce eliminations
+                            // Type 1: same value at both endpoints, different positions
+                            if next != start && chain.len() >= 3 {
+                                // The next node reached via weak link from current
+                                // If next.1 == start.1 and next.0 != start.0, and they "see" each other or share peers
+                                // Actually: for a valid AIC, the chain must start with strong and alternate
+                                // A chain of even length: strong-weak-strong-weak... ending on weak
+                                // The endpoints are connected by weak links at both ends
+                                // Type 1 elimination: start and next have the same value and both endpoints' value can be eliminated from cells seeing both
+                                if next.1 == start.1 && next.0 != start.0 {
+                                    // Cells that see both start.0 and next.0 can have value eliminated
+                                    let val = start.1;
+                                    for pos in grid.empty_positions() {
+                                        if pos != start.0
+                                            && pos != next.0
+                                            && self.sees(pos, start.0)
+                                            && self.sees(pos, next.0)
+                                            && grid.get_candidates(pos).contains(val)
+                                        {
+                                            let tech = if single_value_only {
+                                                Technique::XChain
+                                            } else {
+                                                Technique::AIC
+                                            };
+                                            let mut involved: Vec<Position> = chain.iter().map(|n| n.0).collect();
+                                            involved.push(next.0);
+                                            involved.dedup();
+                                            return Some(Hint {
+                                                technique: tech,
+                                                hint_type: HintType::EliminateCandidates {
+                                                    pos,
+                                                    values: vec![val],
+                                                },
+                                                explanation: format!(
+                                                    "{}: chain of length {} on value(s), eliminate {} from ({}, {}).",
+                                                    tech, chain.len(), val, pos.row + 1, pos.col + 1
+                                                ),
+                                                involved_cells: involved,
+                                            });
+                                        }
+                                    }
+                                }
+
+                                // Type 2: same cell at both endpoints, different values
+                                if !single_value_only
+                                    && next.0 == start.0
+                                    && next.1 != start.1
+                                {
+                                    // All other candidates in that cell can be eliminated
+                                    let cand = grid.get_candidates(start.0);
+                                    let to_remove: Vec<u8> = cand
+                                        .iter()
+                                        .filter(|&v| v != start.1 && v != next.1)
+                                        .collect();
+                                    if !to_remove.is_empty() {
+                                        let involved: Vec<Position> = chain.iter().map(|n| n.0).collect();
+                                        return Some(Hint {
+                                            technique: Technique::AIC,
+                                            hint_type: HintType::EliminateCandidates {
+                                                pos: start.0,
+                                                values: to_remove.clone(),
+                                            },
+                                            explanation: format!(
+                                                "AIC: chain returns to cell ({}, {}), eliminate {:?}.",
+                                                start.0.row + 1, start.0.col + 1, to_remove
+                                            ),
+                                            involved_cells: involved,
+                                        });
+                                    }
+                                }
+                            }
+
+                            if next != start && !visited.contains(&(next, false)) {
+                                let mut new_chain = chain.clone();
+                                new_chain.push(next);
+                                queue.push_back((next, false, new_chain));
+                            }
+                        }
+                    }
+                } else {
+                    // Follow strong links
+                    if let Some(neighbors) = strong.get(&current) {
+                        for &next in neighbors {
+                            if chain.contains(&next) && next != start {
+                                continue;
+                            }
+                            if single_value_only && next.1 != start.1 {
+                                continue;
+                            }
+                            if !visited.contains(&(next, true)) {
+                                let mut new_chain = chain.clone();
+                                new_chain.push(next);
+                                queue.push_back((next, true, new_chain));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    fn find_x_chain(&self, grid: &Grid) -> Option<Hint> {
+        self.find_aic_with_filter(grid, true)
+    }
+
+    fn apply_x_chain(&self, grid: &mut Grid) -> bool {
+        if let Some(hint) = self.find_x_chain(grid) {
+            if let HintType::EliminateCandidates { pos, values } = hint.hint_type {
+                for value in values {
+                    grid.cell_mut(pos).remove_candidate(value);
+                }
+                return true;
+            }
+        }
+        false
+    }
+
+    fn find_aic(&self, grid: &Grid) -> Option<Hint> {
+        self.find_aic_with_filter(grid, false)
+    }
+
+    fn apply_aic(&self, grid: &mut Grid) -> bool {
+        if let Some(hint) = self.find_aic(grid) {
+            if let HintType::EliminateCandidates { pos, values } = hint.hint_type {
+                for value in values {
+                    grid.cell_mut(pos).remove_candidate(value);
+                }
+                return true;
+            }
+        }
+        false
+    }
+
+    // ==================== ALS (Almost Locked Sets) ====================
+
+    /// Generate all combinations of k items from a slice.
+    fn combinations<T: Copy>(items: &[T], k: usize) -> Vec<Vec<T>> {
+        let mut result = Vec::new();
+        if k == 0 || k > items.len() {
+            return result;
+        }
+        let mut indices: Vec<usize> = (0..k).collect();
+        loop {
+            result.push(indices.iter().map(|&i| items[i]).collect());
+            // Find the rightmost index that can be incremented
+            let mut i = k;
+            loop {
+                if i == 0 {
+                    return result;
+                }
+                i -= 1;
+                if indices[i] < items.len() - k + i {
+                    break;
+                }
+                if i == 0 {
+                    return result;
+                }
+            }
+            indices[i] += 1;
+            for j in (i + 1)..k {
+                indices[j] = indices[j - 1] + 1;
+            }
+        }
+    }
+
+    /// Find all Almost Locked Sets in the grid.
+    /// An ALS is a set of N cells in a unit whose candidate union has exactly N+1 values.
+    fn find_all_als(grid: &Grid) -> Vec<(Vec<Position>, crate::BitSet)> {
+        let mut result = Vec::new();
+        let units: Vec<Vec<Position>> = {
+            let mut u = Vec::with_capacity(27);
+            for i in 0..9 {
+                u.push(Self::row_positions(i));
+                u.push(Self::col_positions(i));
+                u.push(Self::box_positions(i));
+            }
+            u
+        };
+
+        for unit in &units {
+            let empty: Vec<Position> = unit
+                .iter()
+                .filter(|&&p| grid.cell(p).is_empty())
+                .copied()
+                .collect();
+
+            // Check subsets of size 2..=5 (ALS needs N cells with N+1 candidates)
+            for n in 2..=empty.len().min(5) {
+                for combo in Self::combinations(&empty, n) {
+                    let mut union = crate::BitSet::empty();
+                    for &pos in &combo {
+                        union = union.union(&grid.get_candidates(pos));
+                    }
+                    if union.count() == (n + 1) as u32 {
+                        // Check this ALS isn't already in result (by same set of positions)
+                        let mut sorted_combo = combo.clone();
+                        sorted_combo.sort_by(|a, b| (a.row, a.col).cmp(&(b.row, b.col)));
+                        let exists = result.iter().any(|(cells, _): &(Vec<Position>, crate::BitSet)| {
+                            *cells == sorted_combo
+                        });
+                        if !exists {
+                            result.push((sorted_combo, union));
+                        }
+                    }
+                }
+            }
+        }
+        result
+    }
+
+    /// ALS-XZ: find two non-overlapping ALS with a restricted common candidate (RCC)
+    /// and eliminate common non-RCC values from cells seeing both.
+    fn find_als_xz(&self, grid: &Grid) -> Option<Hint> {
+        let all_als = Self::find_all_als(grid);
+
+        for i in 0..all_als.len() {
+            for j in (i + 1)..all_als.len() {
+                let (cells_a, cands_a) = &all_als[i];
+                let (cells_b, cands_b) = &all_als[j];
+
+                // Must be non-overlapping
+                if cells_a.iter().any(|p| cells_b.contains(p)) {
+                    continue;
+                }
+
+                let common = cands_a.intersection(cands_b);
+                if common.is_empty() {
+                    continue;
+                }
+
+                // Find restricted common candidates (RCC):
+                // A value X is an RCC if every cell in ALS-A containing X sees every cell in ALS-B containing X
+                for x in common.iter() {
+                    let a_cells_x: Vec<Position> = cells_a
+                        .iter()
+                        .filter(|&&p| grid.get_candidates(p).contains(x))
+                        .copied()
+                        .collect();
+                    let b_cells_x: Vec<Position> = cells_b
+                        .iter()
+                        .filter(|&&p| grid.get_candidates(p).contains(x))
+                        .copied()
+                        .collect();
+
+                    let is_rcc = a_cells_x
+                        .iter()
+                        .all(|&a| b_cells_x.iter().all(|&b| self.sees(a, b)));
+
+                    if !is_rcc {
+                        continue;
+                    }
+
+                    // For each other common value Z, eliminate Z from cells seeing all Z-cells in both ALS
+                    for z in common.iter() {
+                        if z == x {
+                            continue;
+                        }
+
+                        let a_cells_z: Vec<Position> = cells_a
+                            .iter()
+                            .filter(|&&p| grid.get_candidates(p).contains(z))
+                            .copied()
+                            .collect();
+                        let b_cells_z: Vec<Position> = cells_b
+                            .iter()
+                            .filter(|&&p| grid.get_candidates(p).contains(z))
+                            .copied()
+                            .collect();
+
+                        for pos in grid.empty_positions() {
+                            if cells_a.contains(&pos) || cells_b.contains(&pos) {
+                                continue;
+                            }
+                            if !grid.get_candidates(pos).contains(z) {
+                                continue;
+                            }
+                            let sees_all_a = a_cells_z.iter().all(|&p| self.sees(pos, p));
+                            let sees_all_b = b_cells_z.iter().all(|&p| self.sees(pos, p));
+                            if sees_all_a && sees_all_b {
+                                let mut involved = cells_a.clone();
+                                involved.extend(cells_b);
+                                return Some(Hint {
+                                    technique: Technique::AlsXz,
+                                    hint_type: HintType::EliminateCandidates {
+                                        pos,
+                                        values: vec![z],
+                                    },
+                                    explanation: format!(
+                                        "ALS-XZ: RCC={}, eliminate {} from ({}, {}).",
+                                        x, z, pos.row + 1, pos.col + 1
+                                    ),
+                                    involved_cells: involved,
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    fn apply_als_xz(&self, grid: &mut Grid) -> bool {
+        if let Some(hint) = self.find_als_xz(grid) {
+            if let HintType::EliminateCandidates { pos, values } = hint.hint_type {
+                for value in values {
+                    grid.cell_mut(pos).remove_candidate(value);
+                }
+                return true;
+            }
+        }
+        false
+    }
+
+    /// ALS-XY-Wing: Three ALS (A-B-C) with RCC X between A-B and RCC Y between B-C.
+    /// Eliminate common value Z from cells seeing all Z-cells in A and C.
+    fn find_als_xy_wing(&self, grid: &Grid) -> Option<Hint> {
+        let all_als = Self::find_all_als(grid);
+        // Limit to smaller ALS for performance
+        let small_als: Vec<&(Vec<Position>, crate::BitSet)> = all_als
+            .iter()
+            .filter(|(cells, _)| cells.len() <= 4)
+            .collect();
+
+        // Pre-compute RCC map: for each pair (i, j), which values are RCC?
+        let mut rcc_map: std::collections::HashMap<(usize, usize), Vec<u8>> =
+            std::collections::HashMap::new();
+
+        for i in 0..small_als.len() {
+            for j in (i + 1)..small_als.len() {
+                let (cells_a, cands_a) = small_als[i];
+                let (cells_b, cands_b) = small_als[j];
+
+                if cells_a.iter().any(|p| cells_b.contains(p)) {
+                    continue;
+                }
+
+                let common = cands_a.intersection(cands_b);
+                let mut rccs = Vec::new();
+                for v in common.iter() {
+                    let a_cells: Vec<Position> = cells_a
+                        .iter()
+                        .filter(|&&p| grid.get_candidates(p).contains(v))
+                        .copied()
+                        .collect();
+                    let b_cells: Vec<Position> = cells_b
+                        .iter()
+                        .filter(|&&p| grid.get_candidates(p).contains(v))
+                        .copied()
+                        .collect();
+                    if a_cells.iter().all(|&a| b_cells.iter().all(|&b| self.sees(a, b))) {
+                        rccs.push(v);
+                    }
+                }
+                if !rccs.is_empty() {
+                    rcc_map.insert((i, j), rccs.clone());
+                    rcc_map.insert((j, i), rccs);
+                }
+            }
+        }
+
+        // Find triples A-B-C where A-B has RCC X and B-C has RCC Y (X != Y)
+        for b_idx in 0..small_als.len() {
+            // Find all ALS connected to B via RCC
+            let partners: Vec<(usize, &[u8])> = rcc_map
+                .iter()
+                .filter(|((from, _), _)| *from == b_idx)
+                .map(|((_, to), rccs)| (*to, rccs.as_slice()))
+                .collect();
+
+            for pi in 0..partners.len() {
+                for pj in (pi + 1)..partners.len() {
+                    let (a_idx, rccs_ab) = partners[pi];
+                    let (c_idx, rccs_bc) = partners[pj];
+
+                    if a_idx == c_idx {
+                        continue;
+                    }
+
+                    let (cells_a, cands_a) = small_als[a_idx];
+                    let (cells_c, cands_c) = small_als[c_idx];
+
+                    // A and C must be non-overlapping
+                    if cells_a.iter().any(|p| cells_c.contains(p)) {
+                        continue;
+                    }
+
+                    // Find X in rccs_ab and Y in rccs_bc where X != Y
+                    for &x in rccs_ab {
+                        for &y in rccs_bc {
+                            if x == y {
+                                continue;
+                            }
+
+                            // Find common values Z between A and C (not X, not Y)
+                            let common_ac = cands_a.intersection(cands_c);
+                            for z in common_ac.iter() {
+                                if z == x || z == y {
+                                    continue;
+                                }
+
+                                let a_cells_z: Vec<Position> = cells_a
+                                    .iter()
+                                    .filter(|&&p| grid.get_candidates(p).contains(z))
+                                    .copied()
+                                    .collect();
+                                let c_cells_z: Vec<Position> = cells_c
+                                    .iter()
+                                    .filter(|&&p| grid.get_candidates(p).contains(z))
+                                    .copied()
+                                    .collect();
+
+                                if a_cells_z.is_empty() || c_cells_z.is_empty() {
+                                    continue;
+                                }
+
+                                for pos in grid.empty_positions() {
+                                    if cells_a.contains(&pos)
+                                        || small_als[b_idx].0.contains(&pos)
+                                        || cells_c.contains(&pos)
+                                    {
+                                        continue;
+                                    }
+                                    if !grid.get_candidates(pos).contains(z) {
+                                        continue;
+                                    }
+                                    let sees_all_a = a_cells_z.iter().all(|&p| self.sees(pos, p));
+                                    let sees_all_c = c_cells_z.iter().all(|&p| self.sees(pos, p));
+                                    if sees_all_a && sees_all_c {
+                                        let mut involved = cells_a.clone();
+                                        involved.extend(small_als[b_idx].0.iter());
+                                        involved.extend(cells_c);
+                                        return Some(Hint {
+                                            technique: Technique::AlsXyWing,
+                                            hint_type: HintType::EliminateCandidates {
+                                                pos,
+                                                values: vec![z],
+                                            },
+                                            explanation: format!(
+                                                "ALS-XY-Wing: RCC X={}, Y={}, eliminate {} from ({}, {}).",
+                                                x, y, z, pos.row + 1, pos.col + 1
+                                            ),
+                                            involved_cells: involved,
+                                        });
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    fn apply_als_xy_wing(&self, grid: &mut Grid) -> bool {
+        if let Some(hint) = self.find_als_xy_wing(grid) {
             if let HintType::EliminateCandidates { pos, values } = hint.hint_type {
                 for value in values {
                     grid.cell_mut(pos).remove_candidate(value);
@@ -2225,5 +3075,69 @@ mod tests {
         let difficulty = solver.rate_difficulty(&grid);
 
         assert!(difficulty >= Difficulty::Easy);
+    }
+
+    #[test]
+    fn test_se_ratings() {
+        // SE ratings should be monotonically increasing for each difficulty tier
+        assert!(Technique::HiddenSingle.se_rating() < Technique::NakedSingle.se_rating());
+        assert!(Technique::NakedSingle.se_rating() < Technique::NakedPair.se_rating());
+        assert!(Technique::NakedPair.se_rating() < Technique::XWing.se_rating());
+        assert!(Technique::XWing.se_rating() < Technique::FinnedXWing.se_rating());
+        assert!(Technique::XYWing.se_rating() < Technique::XChain.se_rating());
+        assert!(Technique::AlsXz.se_rating() < Technique::AIC.se_rating());
+        assert!(Technique::AIC.se_rating() < Technique::AlsXyWing.se_rating());
+        assert!(Technique::AlsXyWing.se_rating() < Technique::Backtracking.se_rating());
+    }
+
+    #[test]
+    fn test_se_rating_for_puzzle() {
+        let puzzle =
+            "530070000600195000098000060800060003400803001700020006060000280000419005000080079";
+        let grid = Grid::from_string(puzzle).unwrap();
+
+        let solver = Solver::new();
+        let se = solver.rate_se(&grid);
+
+        // Should be a positive rating
+        assert!(se > 0.0);
+        assert!(se <= 9.0);
+    }
+
+    #[test]
+    fn test_technique_display() {
+        assert_eq!(Technique::FinnedXWing.to_string(), "Finned X-Wing");
+        assert_eq!(Technique::AIC.to_string(), "AIC");
+        assert_eq!(Technique::AlsXz.to_string(), "ALS-XZ");
+        assert_eq!(Technique::AlsXyWing.to_string(), "ALS-XY-Wing");
+        assert_eq!(Technique::XChain.to_string(), "X-Chain");
+    }
+
+    #[test]
+    fn test_combinations() {
+        let items = vec![1, 2, 3, 4];
+        let combos = Solver::combinations(&items, 2);
+        assert_eq!(combos.len(), 6);
+        assert!(combos.contains(&vec![1, 2]));
+        assert!(combos.contains(&vec![3, 4]));
+
+        let combos3 = Solver::combinations(&items, 3);
+        assert_eq!(combos3.len(), 4);
+    }
+
+    #[test]
+    fn test_solve_with_techniques_regression() {
+        // Ensure existing puzzles still solve correctly via technique-based solving
+        let puzzle =
+            "530070000600195000098000060800060003400803001700020006060000280000419005000080079";
+        let grid = Grid::from_string(puzzle).unwrap();
+
+        let solver = Solver::new();
+        let mut working = grid.deep_clone();
+        let max_tech = solver.solve_with_techniques(&mut working);
+
+        // Should solve without backtracking
+        assert!(max_tech < Technique::Backtracking);
+        assert!(working.is_complete());
     }
 }

@@ -76,6 +76,8 @@ pub struct GameHint {
     pub explanation: String,
     /// The technique name
     pub technique: String,
+    /// Sudoku Explainer (SE) difficulty rating for this technique
+    pub se_rating: f32,
 }
 
 impl From<Hint> for GameHint {
@@ -89,6 +91,8 @@ impl From<Hint> for GameHint {
             }
         };
 
+        let se_rating = hint.technique.se_rating();
+
         GameHint {
             row,
             col,
@@ -96,6 +100,7 @@ impl From<Hint> for GameHint {
             eliminate,
             explanation: hint.explanation,
             technique: hint.technique.to_string(),
+            se_rating,
         }
     }
 }
@@ -354,6 +359,13 @@ impl SudokuGame {
     /// Get the difficulty level
     pub fn get_difficulty(&self) -> GameDifficulty {
         (*self.difficulty.lock().unwrap()).into()
+    }
+
+    /// Get the Sudoku Explainer (SE) numerical rating for this puzzle
+    pub fn get_se_rating(&self) -> f32 {
+        let grid = self.grid.lock().unwrap();
+        let solver = Solver::new();
+        solver.rate_se(&grid)
     }
 
     /// Get the number of hints used
