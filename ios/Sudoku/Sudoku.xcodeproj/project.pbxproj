@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		A1B2C3D4E5F60001AABBCC01 /* QRCodeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60002AABBCC01 /* QRCodeView.swift */; };
+		A1B2C3D4E5F60001AABBCC02 /* QRScannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60002AABBCC02 /* QRScannerView.swift */; };
 		089359C4D2B805E077C674C7 /* LoseScreenView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2CCF2001D26F435BD4F437E /* LoseScreenView.swift */; };
 		0A0FA9214358FB0851D69424 /* WinScreenView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10EFCC2D4094740940E40BA /* WinScreenView.swift */; };
 		1726143491F7B599683DFCD8 /* SudokuEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C888EF30EC69E5CCD23F685 /* SudokuEngine.swift */; };
@@ -78,6 +80,8 @@
 		B778D4F8E525013FE40E3C47 /* GameManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameManager.swift; sourceTree = "<group>"; };
 		B78BCAD761AFB4A1F28E0BB3 /* Sudoku.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Sudoku.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		B98B31F0CE963EC1CD01AA8D /* GameView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameView.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F60002AABBCC01 /* QRCodeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QRCodeView.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F60002AABBCC02 /* QRScannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QRScannerView.swift; sourceTree = "<group>"; };
 		BC9BD24D8389D483E341F48E /* GameModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameModels.swift; sourceTree = "<group>"; };
 		D2CCF2001D26F435BD4F437E /* LoseScreenView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoseScreenView.swift; sourceTree = "<group>"; };
 		D7B70116407782179275FE99 /* GameCenterManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameCenterManager.swift; sourceTree = "<group>"; };
@@ -195,6 +199,8 @@
 				7C655A4BF5C47359EC66D564 /* GridView.swift */,
 				D2CCF2001D26F435BD4F437E /* LoseScreenView.swift */,
 				5845121794317A59FF4BEA24 /* NumberPadView.swift */,
+				A1B2C3D4E5F60002AABBCC01 /* QRCodeView.swift */,
+				A1B2C3D4E5F60002AABBCC02 /* QRScannerView.swift */,
 				5F81857F69ADEC8F76D93DF3 /* SettingsView.swift */,
 				4996D6E89188CCEE2DDA0882 /* StatsView.swift */,
 				B10EFCC2D4094740940E40BA /* WinScreenView.swift */,
@@ -362,6 +368,8 @@
 				089359C4D2B805E077C674C7 /* LoseScreenView.swift in Sources */,
 				FFDAC89D9AE5F86EA0F1B996 /* NumberPadView.swift in Sources */,
 				E3D566CB81AA0EC9502D4FAA /* PuzzleCache.swift in Sources */,
+				A1B2C3D4E5F60001AABBCC01 /* QRCodeView.swift in Sources */,
+				A1B2C3D4E5F60001AABBCC02 /* QRScannerView.swift in Sources */,
 				9C35A44E74CBB456859B96EB /* SettingsView.swift in Sources */,
 				8B6258CC4DD4621086F43E90 /* StatsView.swift in Sources */,
 				B463F4C229827901EA86A192 /* SudokuApp.swift in Sources */,
@@ -553,7 +561,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 202602130306;
+				CURRENT_PROJECT_VERSION = 202602131056;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = "";
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -573,7 +581,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
-				MARKETING_VERSION = 1.1.0;
+				MARKETING_VERSION = 1.2.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -620,7 +628,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 202602130306;
+				CURRENT_PROJECT_VERSION = 202602131056;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = "";
 				ENABLE_NS_ASSERTIONS = NO;
@@ -634,7 +642,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
-				MARKETING_VERSION = 1.1.0;
+				MARKETING_VERSION = 1.2.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
