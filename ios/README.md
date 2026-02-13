@@ -92,14 +92,42 @@ ios/
 - **Persistence** - Auto-save games, statistics stored locally
 - **Accessibility** - VoiceOver support, Dynamic Type
 
-## Integrating the Rust Engine
+## Puzzle Generation (Rust)
 
-The app uses UniFFI to bridge between Swift and Rust. The Swift implementation in `GameViewModel.swift` currently contains a pure-Swift puzzle generator for development. To use the Rust engine:
+When you start a new game, the iOS app asks the Rust engine to generate a brand-new Sudoku puzzle for the selected difficulty.
 
-1. Run `./build.sh` to generate the XCFramework and Swift bindings
-2. Add the generated `SudokuEngine.xcframework` to the Xcode project
-3. Import `SudokuEngine` in Swift files that need it
-4. Replace the Swift puzzle generation with calls to the Rust `SudokuGame` class
+The call chain looks like this:
+
+- Swift: `GameManager.newGame(...)` -> `PuzzleCache.shared.getPuzzle(...)`
+- Swift -> Rust (UniFFI): `SudokuGame.newClassic(difficulty: ...)`
+- Rust: `SudokuGame::new_classic` calls `sudoku_core::Generator::generate(...)` and then solves it with `sudoku_core::Solver`
+
+### How the Generator Picks a Puzzle
+
+The generator lives in `crates/sudoku-core/src/generator.rs` and works in three phases:
+
+1. Generate a full valid solution grid
+   - Start with an empty classic 9x9 grid.
+   - Randomly fill the 3 diagonal 3x3 boxes (they don't constrain each other).
+   - Use the solver to complete the rest of the grid.
+
+2. Remove givens while keeping a unique solution
+   - Shuffle all 81 positions.
+   - Remove values in symmetric pairs (default is 180-degree rotational symmetry; `Extreme` uses no symmetry).
+   - After each removal, the solver checks that the puzzle still has exactly one solution.
+
+3. Rate difficulty and accept/retry
+   - The solver runs `rate_difficulty` (in `crates/sudoku-core/src/solver.rs`) by applying human-style techniques in order.
+   - The generator accepts puzzles that match the target difficulty (sometimes within one adjacent tier) and that land in a givens range for that difficulty.
+   - It will retry up to `max_attempts` for that difficulty before falling back to the last attempt.
+
+### Why the Engine Also Computes the Solution
+
+In `crates/sudoku-ffi/src/lib.rs`, `SudokuGame::new_classic` generates the puzzle grid and also solves it immediately. The solved grid is used to:
+
+- validate player moves (for mistake counting)
+- generate hints
+- support fast checks like "is this puzzle complete?"
 
 Example usage with Rust engine:
 
@@ -120,9 +148,9 @@ if let hint = game.getHint() {
 
 ## Development Notes
 
-### Running Without Rust
+### Rebuilding Rust vs Iterating on SwiftUI
 
-The app includes a pure-Swift implementation of the puzzle generator and solver for development purposes. This allows you to run and test the UI without building the Rust library.
+Run `./build.sh` when you change Rust code or the UniFFI interface. If you're only changing SwiftUI/view code, you can usually just build/run from Xcode without regenerating bindings.
 
 ### Building for Release
 
