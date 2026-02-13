@@ -6,7 +6,7 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use std::fs;
 use std::path::PathBuf;
 use std::time::Duration;
-use sudoku_core::{Difficulty, Hint, Position};
+use sudoku_core::{Difficulty, Hint, Position, PuzzleId};
 
 /// Maximum mistakes before game over
 pub const MAX_MISTAKES: usize = 3;
@@ -145,8 +145,27 @@ impl App {
 
     /// Create a new app with a medium difficulty game
     pub fn new() -> Self {
+        Self::new_with_puzzle(None)
+    }
+
+    /// Create a new app, optionally loading a puzzle from an 81-character string or 8-character short code
+    pub fn new_with_puzzle(puzzle: Option<&str>) -> Self {
+        let game = match puzzle {
+            Some(p) if p.len() == 81 => {
+                Game::from_string(p).unwrap_or_else(|| Game::new(Difficulty::Medium))
+            }
+            Some(p) => match PuzzleId::from_short_code(p) {
+                Some(id) => Game::new_with_id(&id),
+                None => {
+                    // Try as puzzle string anyway (fallback)
+                    Game::from_string(p).unwrap_or_else(|| Game::new(Difficulty::Medium))
+                }
+            },
+            None => Game::new(Difficulty::Medium),
+        };
+
         Self {
-            game: Game::new(Difficulty::Medium),
+            game,
             cursor: Position::new(4, 4),
             mode: InputMode::Normal,
             menu: MenuState::None,
@@ -255,6 +274,8 @@ impl App {
             self.game.mistakes(),
             self.game.move_times_ms(),
             self.game.notes_used(),
+            self.game.seed(),
+            self.game.short_code(),
         );
     }
 
@@ -533,9 +554,10 @@ impl App {
                 self.show_message(&format!("Auto-fill hints {}", state));
             }
 
-            // Save
+            // Save + Share
             KeyCode::Char('S') if key.modifiers.contains(KeyModifiers::SHIFT) => {
                 self.save_game();
+                self.share_puzzle();
             }
 
             // Load
@@ -801,6 +823,35 @@ impl App {
         match fs::write(Self::save_path(), json) {
             Ok(_) => self.show_message("Game saved"),
             Err(_) => self.show_message("Failed to save"),
+        }
+    }
+
+    /// Write the puzzle share URL to a file
+    fn share_puzzle(&mut self) {
+        let (url, msg_suffix) = if let Some(code) = self.game.short_code() {
+            let url = format!(
+                "https://kcirtapfromspace.github.io/sudoku/?s={}",
+                code
+            );
+            (url, format!(" ({})", code))
+        } else {
+            let puzzle_str = self.game.original_puzzle();
+            let url = format!(
+                "https://kcirtapfromspace.github.io/sudoku/?p={}",
+                puzzle_str
+            );
+            (url, String::new())
+        };
+
+        let share_dir = dirs::data_local_dir()
+            .unwrap_or_else(|| PathBuf::from("."))
+            .join("sudoku");
+        let _ = fs::create_dir_all(&share_dir);
+        let share_path = share_dir.join("share.txt");
+
+        match fs::write(&share_path, &url) {
+            Ok(_) => self.show_message(&format!("Share URL saved{}", msg_suffix)),
+            Err(_) => self.show_message("Failed to save share URL"),
         }
     }
 

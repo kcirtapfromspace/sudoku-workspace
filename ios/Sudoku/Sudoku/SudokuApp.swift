@@ -23,6 +23,27 @@ struct SudokuApp: App {
                         gameManager.saveCurrentGame()
                     }
                 }
+                .onOpenURL { url in
+                    // Handle shared puzzle URLs:
+                    // https://kcirtapfromspace.github.io/sudoku/?s=SHORT_CODE
+                    // https://kcirtapfromspace.github.io/sudoku/?p=PUZZLE_STRING
+                    guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
+                        return
+                    }
+
+                    // Try short code first (?s=)
+                    if let shortCode = components.queryItems?.first(where: { $0.name == "s" })?.value,
+                       shortCode.count == 8 {
+                        gameManager.loadSharedPuzzle(shortCode)
+                        return
+                    }
+
+                    // Fall back to 81-char puzzle (?p=)
+                    if let puzzleParam = components.queryItems?.first(where: { $0.name == "p" })?.value,
+                       puzzleParam.count == 81 {
+                        gameManager.loadSharedPuzzle(puzzleParam)
+                    }
+                }
         }
     }
 }

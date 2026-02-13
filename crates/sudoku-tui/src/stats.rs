@@ -48,6 +48,12 @@ pub struct GameRecord {
     pub move_time_std_dev: f32,
     /// Whether this record passed anti-bot verification
     pub verified: bool,
+    /// Puzzle seed (if generated via PuzzleId)
+    #[serde(default)]
+    pub seed: Option<u64>,
+    /// Short code (if generated via PuzzleId)
+    #[serde(default)]
+    pub short_code: Option<String>,
 }
 
 impl GameRecord {
@@ -338,6 +344,8 @@ impl StatsManager {
         mistakes: usize,
         move_times_ms: &[u64],
         notes_used: bool,
+        seed: Option<u64>,
+        short_code: Option<String>,
     ) -> &GameRecord {
         let puzzle_hash = Self::hash_puzzle(puzzle);
 
@@ -384,6 +392,8 @@ impl StatsManager {
             min_move_time_ms,
             move_time_std_dev,
             verified: false,
+            seed,
+            short_code,
         };
 
         // Run anti-bot verification

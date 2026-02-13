@@ -10,6 +10,7 @@ mod diversity;
 mod generator;
 mod grid;
 mod position;
+mod puzzle_id;
 mod solver;
 
 pub use bitset::BitSet;
@@ -22,4 +23,5 @@ pub use diversity::{DifficultyStats, DiversityAnalyzer, DiversityReport, Theoret
 pub use generator::{Generator, GeneratorConfig, SymmetryType};
 pub use grid::{Grid, MoveError, ValidationResult};
 pub use position::Position;
+pub use puzzle_id::PuzzleId;
 pub use solver::{Difficulty, Hint, HintType, Solver, Technique};

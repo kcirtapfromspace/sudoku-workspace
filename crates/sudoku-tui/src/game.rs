@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::time::{Duration, Instant};
-use sudoku_core::{Difficulty, Generator, Grid, Hint, Position, Solver};
+use sudoku_core::{Difficulty, Grid, Hint, Position, PuzzleId, Solver};
 
 /// A single move in the game (for undo/redo)
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -62,13 +62,15 @@ pub struct Game {
     move_times_ms: Vec<u64>,
     /// Whether notes (candidates) were used during this game
     notes_used: bool,
+    /// Puzzle seed (if generated via PuzzleId)
+    seed: Option<u64>,
 }
 
 impl Game {
     /// Create a new game with the specified difficulty
     pub fn new(difficulty: Difficulty) -> Self {
-        let mut generator = Generator::new();
-        let mut grid = generator.generate(difficulty);
+        let puzzle_id = PuzzleId::random(difficulty);
+        let mut grid = puzzle_id.generate();
 
         // Save original puzzle before solving
         let original_puzzle = grid.to_string_compact();
@@ -98,6 +100,43 @@ impl Game {
             last_move_time: now,
             move_times_ms: Vec::new(),
             notes_used: false,
+            seed: Some(puzzle_id.seed),
+        }
+    }
+
+    /// Create a game from a PuzzleId
+    pub fn new_with_id(id: &PuzzleId) -> Self {
+        let mut grid = id.generate();
+
+        // Save original puzzle before solving
+        let original_puzzle = grid.to_string_compact();
+
+        let solver = Solver::new();
+        let solution = solver
+            .solve(&grid)
+            .expect("Generated puzzle should be solvable");
+
+        // Clear all candidates - players add their own notes manually
+        grid.clear_all_candidates();
+
+        let now = Instant::now();
+        Self {
+            grid,
+            solution,
+            original_puzzle,
+            difficulty: id.difficulty,
+            undo_stack: Vec::new(),
+            redo_stack: Vec::new(),
+            start_time: now,
+            elapsed: Duration::ZERO,
+            paused: false,
+            completed: false,
+            hints_used: 0,
+            mistakes: 0,
+            last_move_time: now,
+            move_times_ms: Vec::new(),
+            notes_used: false,
+            seed: Some(id.seed),
         }
     }
 
@@ -125,6 +164,7 @@ impl Game {
             last_move_time: now,
             move_times_ms: Vec::new(),
             notes_used: false,
+            seed: None,
         })
     }
 
@@ -193,6 +233,22 @@ impl Game {
     /// Check if notes (candidates) were used during this game
     pub fn notes_used(&self) -> bool {
         self.notes_used
+    }
+
+    /// Get the puzzle seed (if generated via PuzzleId)
+    pub fn seed(&self) -> Option<u64> {
+        self.seed
+    }
+
+    /// Get the short code for this puzzle (if it has a seed)
+    pub fn short_code(&self) -> Option<String> {
+        self.seed.map(|seed| {
+            PuzzleId {
+                difficulty: self.difficulty,
+                seed,
+            }
+            .to_short_code()
+        })
     }
 
     /// Toggle pause state
@@ -777,6 +833,7 @@ impl Game {
             last_move_time: now,
             move_times_ms: Vec::new(), // Can't restore move times from save
             notes_used: false,         // Reset for loaded game
+            seed: None,                // Can't restore seed from save
         })
     }
 }

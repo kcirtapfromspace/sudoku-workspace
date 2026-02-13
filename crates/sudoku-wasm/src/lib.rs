@@ -139,6 +139,45 @@ impl SudokuGame {
         self.render();
     }
 
+    /// Load a puzzle from an 81-character string, returns true on success
+    #[wasm_bindgen]
+    pub fn load_puzzle_string(&mut self, puzzle: &str) -> bool {
+        if let Some(mut new_state) = GameState::from_puzzle_string(puzzle) {
+            // Preserve player stats
+            new_state.load_stats_json(&self.state.stats_json());
+            self.state = new_state;
+            self.render();
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Get the current puzzle as an 81-character string
+    #[wasm_bindgen]
+    pub fn get_puzzle_string(&self) -> String {
+        self.state.puzzle_string()
+    }
+
+    /// Load a puzzle from a short code (e.g., "M1A2B3C4"), returns true on success
+    #[wasm_bindgen]
+    pub fn load_short_code(&mut self, code: &str) -> bool {
+        if let Some(mut new_state) = GameState::from_short_code(code) {
+            new_state.load_stats_json(&self.state.stats_json());
+            self.state = new_state;
+            self.render();
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Get the short code for the current puzzle, or empty string if not available
+    #[wasm_bindgen]
+    pub fn get_short_code(&self) -> String {
+        self.state.short_code().unwrap_or_default()
+    }
+
     /// Set the color theme
     #[wasm_bindgen]
     pub fn set_theme(&mut self, theme_name: &str) {

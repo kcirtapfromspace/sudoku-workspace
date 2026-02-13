@@ -11,6 +11,7 @@ struct GameView: View {
     @State private var heartShake = false
     @State private var lastMistakeCount = 0
     @State private var showingCheckResult = false  // Temporarily reveal errors on "Check"
+    @State private var showingShareSheet = false
     #if DEBUG
     @State private var showingDebugMenu = false
     #endif
@@ -241,6 +242,20 @@ struct GameView: View {
             if gameManager.settings.timerVisible {
                 Label(game.elapsedTimeString, systemImage: "clock")
                     .font(.headline.monospacedDigit())
+            }
+
+            Spacer()
+
+            // Share button
+            Button {
+                showingShareSheet = true
+            } label: {
+                Image(systemName: "square.and.arrow.up")
+                    .font(.body)
+            }
+            .sheet(isPresented: $showingShareSheet) {
+                QRCodeView(puzzleString: game.getPuzzleFingerprint(), shortCode: game.getShortCode())
+                    .presentationDetents([.medium, .large])
             }
 
             Spacer()

@@ -69,5 +69,7 @@
     <array>
         <string>$(PRODUCT_BUNDLE_IDENTIFIER).refresh</string>
     </array>
+    <key>NSCameraUsageDescription</key>
+    <string>Camera access is needed to scan QR codes for shared Sudoku puzzles.</string>
 </dict>
 </plist>

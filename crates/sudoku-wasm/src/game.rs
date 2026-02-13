@@ -2,7 +2,7 @@
 
 use crate::animations::{LoseScreen, WinScreen};
 use serde::{Deserialize, Serialize};
-use sudoku_core::{BitSet, Difficulty, Generator, Grid, Hint, HintType, Position, Solver};
+use sudoku_core::{BitSet, Difficulty, Generator, Grid, Hint, HintType, Position, PuzzleId, Solver};
 
 /// Maximum mistakes before game over
 pub const MAX_MISTAKES: usize = 3;
@@ -223,13 +223,17 @@ pub struct GameState {
     player_stats: PlayerStats,
     /// Whether we've already recorded this game (prevent double-counting)
     game_recorded: bool,
+    /// Seed for deterministic puzzle generation (from PuzzleId)
+    seed: Option<u64>,
 }
 
 impl GameState {
     /// Create a new game
     pub fn new(difficulty: Difficulty) -> Self {
-        let mut generator = Generator::new();
-        let puzzle = generator.generate(difficulty);
+        let puzzle_id = PuzzleId::random(difficulty);
+        let puzzle = puzzle_id.generate();
+        let seed = puzzle_id.seed;
+
         let mut grid = puzzle.deep_clone();
         grid.clear_all_candidates();
 
@@ -260,6 +264,7 @@ impl GameState {
             show_valid_cells: false,
             player_stats: PlayerStats::default(),
             game_recorded: false,
+            seed: Some(seed),
         }
     }
 
@@ -268,6 +273,90 @@ impl GameState {
         let mut game = Self::new(difficulty);
         game.player_stats = stats;
         game
+    }
+
+    /// Create a game from an 81-character puzzle string
+    pub fn from_puzzle_string(puzzle: &str) -> Option<Self> {
+        let puzzle_grid = Grid::from_string(puzzle)?;
+        let solver = Solver::new();
+        let solution = solver.solve(&puzzle_grid)?;
+        let difficulty = solver.rate_difficulty(&puzzle_grid);
+
+        let mut grid = puzzle_grid.deep_clone();
+        grid.clear_all_candidates();
+
+        Some(Self {
+            grid,
+            puzzle: puzzle_grid,
+            solution,
+            difficulty,
+            cursor: Position::new(4, 4),
+            mode: InputMode::Normal,
+            screen: ScreenState::Playing,
+            start_time: Self::now(),
+            paused_elapsed: 0.0,
+            mistakes: 0,
+            hints_used: 0,
+            message: None,
+            message_timer: 0,
+            current_hint: None,
+            undo_stack: Vec::new(),
+            redo_stack: Vec::new(),
+            frame: 0,
+            win_screen: None,
+            lose_screen: None,
+            show_ghost_hints: false,
+            show_valid_cells: false,
+            player_stats: PlayerStats::default(),
+            game_recorded: false,
+            seed: None,
+        })
+    }
+
+    /// Create a game from a short code (e.g., "M1A2B3C4")
+    pub fn from_short_code(code: &str) -> Option<Self> {
+        let puzzle_id = PuzzleId::from_short_code(code)?;
+        let puzzle = puzzle_id.generate();
+        let seed = puzzle_id.seed;
+        let difficulty = puzzle_id.difficulty;
+
+        let solver = Solver::new();
+        let solution = solver.solve(&puzzle)?;
+
+        let mut grid = puzzle.deep_clone();
+        grid.clear_all_candidates();
+
+        Some(Self {
+            grid,
+            puzzle,
+            solution,
+            difficulty,
+            cursor: Position::new(4, 4),
+            mode: InputMode::Normal,
+            screen: ScreenState::Playing,
+            start_time: Self::now(),
+            paused_elapsed: 0.0,
+            mistakes: 0,
+            hints_used: 0,
+            message: None,
+            message_timer: 0,
+            current_hint: None,
+            undo_stack: Vec::new(),
+            redo_stack: Vec::new(),
+            frame: 0,
+            win_screen: None,
+            lose_screen: None,
+            show_ghost_hints: false,
+            show_valid_cells: false,
+            player_stats: PlayerStats::default(),
+            game_recorded: false,
+            seed: Some(seed),
+        })
+    }
+
+    /// Get the puzzle as an 81-character string (givens as digits, empty as '0')
+    pub fn puzzle_string(&self) -> String {
+        self.puzzle.to_string_compact()
     }
 
     /// Get current timestamp in milliseconds
@@ -760,6 +849,20 @@ impl GameState {
     pub fn player_stats(&self) -> &PlayerStats {
         &self.player_stats
     }
+    pub fn seed(&self) -> Option<u64> {
+        self.seed
+    }
+
+    /// Get the short code for the current puzzle (e.g., "M1A2B3C4")
+    pub fn short_code(&self) -> Option<String> {
+        self.seed.map(|s| {
+            let id = PuzzleId {
+                difficulty: self.difficulty,
+                seed: s,
+            };
+            id.to_short_code()
+        })
+    }
 
     /// Get player stats as JSON for persistence
     pub fn stats_json(&self) -> String {
@@ -950,6 +1053,7 @@ impl GameState {
             show_valid_cells: false,
             player_stats: PlayerStats::default(),
             game_recorded: false,
+            seed: None,
         }
     }
 }

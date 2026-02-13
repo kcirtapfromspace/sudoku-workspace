@@ -7,6 +7,7 @@ mod stats;
 mod theme;
 
 use app::App;
+use clap::Parser;
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyModifiers},
     execute,
@@ -15,14 +16,24 @@ use crossterm::{
 use std::io::{self, Write};
 use std::time::{Duration, Instant};
 
+#[derive(Parser)]
+#[command(name = "sudoku", about = "Terminal Sudoku game")]
+struct Cli {
+    /// Load a puzzle from an 81-character string or 8-character short code
+    #[arg(long)]
+    puzzle: Option<String>,
+}
+
 fn main() -> io::Result<()> {
+    let cli = Cli::parse();
+
     // Setup terminal
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
 
     // Run the app
-    let result = run_app(&mut stdout);
+    let result = run_app(&mut stdout, cli.puzzle.as_deref());
 
     // Restore terminal
     disable_raw_mode()?;
@@ -35,8 +46,8 @@ fn main() -> io::Result<()> {
     Ok(())
 }
 
-fn run_app(stdout: &mut io::Stdout) -> io::Result<()> {
-    let mut app = App::new();
+fn run_app(stdout: &mut io::Stdout, puzzle: Option<&str>) -> io::Result<()> {
+    let mut app = App::new_with_puzzle(puzzle);
     let mut last_tick = Instant::now();
 
     loop {

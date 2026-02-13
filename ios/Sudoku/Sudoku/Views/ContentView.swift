@@ -75,6 +75,7 @@ struct MenuView: View {
     @State private var showingSettings = false
     @State private var showingStats = false
     @State private var showingHistory = false
+    @State private var showingScanner = false
 
     var body: some View {
         NavigationStack {
@@ -169,6 +170,18 @@ struct MenuView: View {
                     }
 
                     Button {
+                        showingScanner = true
+                    } label: {
+                        VStack {
+                            Image(systemName: "qrcode.viewfinder")
+                                .font(.title2)
+                            Text("Scan")
+                                .font(.caption)
+                        }
+                    }
+                    .accessibilityIdentifier("Scan")
+
+                    Button {
                         showingSettings = true
                     } label: {
                         VStack {
@@ -205,6 +218,12 @@ struct MenuView: View {
             }
             .sheet(isPresented: $showingHistory) {
                 GameHistoryView()
+            }
+            .sheet(isPresented: $showingScanner) {
+                QRScannerView { puzzleString in
+                    showingScanner = false
+                    gameManager.loadSharedPuzzle(puzzleString)
+                }
             }
         }
     }

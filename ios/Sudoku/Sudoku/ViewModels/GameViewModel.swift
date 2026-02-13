@@ -558,6 +558,11 @@ class GameViewModel: ObservableObject {
         return result
     }
 
+    /// Get the short code for this puzzle (8-char PuzzleId), if available
+    func getShortCode() -> String? {
+        return game.getShortCode()
+    }
+
     /// Get the puzzle hash for history tracking
     var puzzleHash: String {
         PuzzleRecord.generateHash(from: getPuzzleFingerprint())

@@ -1,5 +1,5 @@
 use std::sync::{Arc, Mutex};
-use sudoku_core::{Difficulty, Generator, Grid, Hint, HintType, Position, Solver};
+use sudoku_core::{Difficulty, Generator, Grid, Hint, HintType, Position, PuzzleId, Solver};
 
 uniffi::setup_scaffolding!();
 
@@ -133,6 +133,7 @@ pub struct SudokuGame {
     redo_stack: Mutex<Vec<(usize, usize, Option<u8>)>>,
     hints_used: Mutex<usize>,
     mistakes: Mutex<usize>,
+    seed: Mutex<Option<u64>>,
 }
 
 #[uniffi::export]
@@ -141,8 +142,8 @@ impl SudokuGame {
     #[uniffi::constructor]
     pub fn new_classic(difficulty: GameDifficulty) -> Arc<Self> {
         let diff: Difficulty = difficulty.into();
-        let mut generator = Generator::new();
-        let grid = generator.generate(diff);
+        let puzzle_id = PuzzleId::random(diff);
+        let grid = puzzle_id.generate();
 
         let solver = Solver::new();
         let rated = solver.rate_difficulty(&grid);
@@ -159,6 +160,7 @@ impl SudokuGame {
             redo_stack: Mutex::new(Vec::new()),
             hints_used: Mutex::new(0),
             mistakes: Mutex::new(0),
+            seed: Mutex::new(Some(puzzle_id.seed)),
         })
     }
 
@@ -183,6 +185,7 @@ impl SudokuGame {
             redo_stack: Mutex::new(Vec::new()),
             hints_used: Mutex::new(0),
             mistakes: Mutex::new(0),
+            seed: Mutex::new(None),
         })
     }
 
@@ -575,6 +578,28 @@ impl SudokuGame {
         !self.redo_stack.lock().unwrap().is_empty()
     }
 
+    /// Get the puzzle as an 81-character string (givens as digits, empty as '0')
+    pub fn get_puzzle_string(&self) -> String {
+        let grid = self.grid.lock().unwrap();
+        let values = grid.values();
+        let mut result = String::with_capacity(81);
+        for row in 0..9 {
+            for col in 0..9 {
+                let pos = Position::new(row, col);
+                if grid.cell(pos).is_given() {
+                    if let Some(v) = values[row][col] {
+                        result.push((b'0' + v) as char);
+                    } else {
+                        result.push('0');
+                    }
+                } else {
+                    result.push('0');
+                }
+            }
+        }
+        result
+    }
+
     /// Apply a hint automatically
     pub fn apply_hint(&self) -> Option<GameHint> {
         let hint = {
@@ -608,6 +633,13 @@ impl SudokuGame {
         }
 
         Some(hint.into())
+    }
+
+    /// Get the short code for this puzzle, if available
+    pub fn get_short_code(&self) -> Option<String> {
+        let seed = self.seed.lock().unwrap();
+        let difficulty = *self.difficulty.lock().unwrap();
+        seed.map(|s| PuzzleId { difficulty, seed: s }.to_short_code())
     }
 }
 
@@ -662,6 +694,29 @@ pub fn game_from_string(puzzle: String) -> Option<Arc<SudokuGame>> {
         redo_stack: Mutex::new(Vec::new()),
         hints_used: Mutex::new(0),
         mistakes: Mutex::new(0),
+        seed: Mutex::new(None),
+    }))
+}
+
+/// Create a game from a short code (e.g., "M1A2B3C4")
+#[uniffi::export]
+pub fn game_from_short_code(code: String) -> Option<Arc<SudokuGame>> {
+    let puzzle_id = PuzzleId::from_short_code(&code)?;
+    let grid = puzzle_id.generate();
+    let solver = Solver::new();
+    let solution = solver.solve(&grid)?;
+    let rated = solver.rate_difficulty(&grid);
+
+    Some(Arc::new(SudokuGame {
+        grid: Mutex::new(grid),
+        solution: Mutex::new(solution),
+        difficulty: Mutex::new(puzzle_id.difficulty),
+        rated_difficulty: Mutex::new(rated),
+        undo_stack: Mutex::new(Vec::new()),
+        redo_stack: Mutex::new(Vec::new()),
+        hints_used: Mutex::new(0),
+        mistakes: Mutex::new(0),
+        seed: Mutex::new(Some(puzzle_id.seed)),
     }))
 }
 
@@ -714,5 +769,6 @@ pub fn game_deserialize(json: String) -> Option<Arc<SudokuGame>> {
         redo_stack: Mutex::new(Vec::new()),
         hints_used: Mutex::new(hints_used),
         mistakes: Mutex::new(mistakes),
+        seed: Mutex::new(None),
     }))
 }

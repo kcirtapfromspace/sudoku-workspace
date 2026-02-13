@@ -148,6 +148,34 @@ class GameManager: ObservableObject {
         }
     }
 
+    /// Load a shared puzzle from an 81-character string or 8-character short code
+    func loadSharedPuzzle(_ puzzleString: String) {
+        // Try short code first (8-char PuzzleId)
+        let game: SudokuGame
+        if puzzleString.count == 8, let shortCodeGame = gameFromShortCode(code: puzzleString) {
+            game = shortCodeGame
+        } else if let stringGame = gameFromString(puzzle: puzzleString) {
+            game = stringGame
+        } else {
+            return
+        }
+        let rated = Difficulty.from(game.getRatedDifficulty())
+        let viewModel = GameViewModel(cachedGame: game, difficulty: rated)
+
+        if settings.autoFillCandidates {
+            viewModel.fillAllCandidates()
+        } else {
+            viewModel.clearAllCandidates()
+        }
+
+        currentGame = viewModel
+        gameState = .playing
+        saveCurrentGame()
+
+        let fingerprint = viewModel.getPuzzleFingerprint()
+        GameHistoryManager.shared.recordPuzzleStart(puzzleString: fingerprint, difficulty: rated)
+    }
+
     func resumeGame() {
         guard currentGame != nil else { return }
         gameState = .playing
