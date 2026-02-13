@@ -39,11 +39,19 @@ ios/Sudoku/Sudoku/Generated/
 Pods/
 
 # Fastlane
-fastlane/report.xml
-fastlane/Preview.html
-fastlane/screenshots
-fastlane/test_output
+**/fastlane/report.xml
+**/fastlane/Preview.html
+**/fastlane/README.md
+**/fastlane/screenshots
+**/fastlane/test_output
 
 # Ruby / Bundler
 .bundle/
 vendor/bundle/
+**/vendor/bundle/
+ios/Sudoku/vendor/
+ios/Sudoku/Gemfile.lock
+
+# Planning
+plan-*.md
+**/plan-*.md

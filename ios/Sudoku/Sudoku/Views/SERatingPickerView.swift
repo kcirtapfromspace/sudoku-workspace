@@ -6,63 +6,17 @@ struct SERatingPickerView: View {
     @State private var selectedBand: SEBand?
     @State private var refinedSE: Float = 2.0
 
+    private var bands: [SEBand] {
+        Array(SEBand.allCases)
+    }
+
     var body: some View {
         NavigationStack {
             List {
-                ForEach(SEBand.allCases) { band in
-                    Button {
-                        withAnimation {
-                            selectedBand = band
-                            refinedSE = band.defaultSE
-                        }
-                    } label: {
-                        HStack {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(band.name)
-                                    .font(.headline)
-                                    .foregroundStyle(.primary)
-                                Text(band.description)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-
-                            Spacer()
-
-                            Text(String(format: "%.1f", band.defaultSE))
-                                .font(.system(.body, design: .monospaced))
-                                .foregroundStyle(.secondary)
-
-                            if selectedBand == band {
-                                Image(systemName: "checkmark")
-                                    .foregroundStyle(.accentColor)
-                                    .fontWeight(.semibold)
-                            }
-                        }
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-
+                ForEach(bands, id: \.rawValue) { band in
+                    bandRow(band)
                     if selectedBand == band {
-                        VStack(spacing: 8) {
-                            HStack {
-                                Text(String(format: "%.1f", band.range.lowerBound))
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                Slider(
-                                    value: $refinedSE,
-                                    in: band.range,
-                                    step: 0.1
-                                )
-                                Text(String(format: "%.1f", band.range.upperBound))
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                            Text("Target: \(String(format: "%.1f", refinedSE))")
-                                .font(.subheadline.monospaced())
-                                .foregroundStyle(.accentColor)
-                        }
-                        .padding(.vertical, 4)
-                        .transition(.opacity.combined(with: .move(edge: .top)))
+                        bandSlider(band)
                     }
                 }
             }
@@ -81,6 +35,65 @@ struct SERatingPickerView: View {
                 }
             }
         }
+    }
+
+    @ViewBuilder
+    private func bandRow(_ band: SEBand) -> some View {
+        Button {
+            withAnimation {
+                selectedBand = band
+                refinedSE = band.defaultSE
+            }
+        } label: {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(band.name)
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+                    Text(band.description)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                Text(String(format: "%.1f", band.defaultSE))
+                    .font(.system(.body, design: .monospaced))
+                    .foregroundStyle(.secondary)
+
+                if selectedBand == band {
+                    Image(systemName: "checkmark")
+                        .foregroundStyle(Color.accentColor)
+                        .fontWeight(.semibold)
+                }
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    @ViewBuilder
+    private func bandSlider(_ band: SEBand) -> some View {
+        VStack(spacing: 8) {
+            HStack {
+                Text(String(format: "%.1f", band.range.lowerBound))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Slider(
+                    value: $refinedSE,
+                    in: band.range,
+                    step: 0.1
+                )
+                Text(String(format: "%.1f", band.range.upperBound))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Text("Target: \(String(format: "%.1f", refinedSE))")
+                .font(.subheadline.monospaced())
+                .foregroundStyle(Color.accentColor)
+        }
+        .padding(.vertical, 4)
+        .transition(.opacity.combined(with: .move(edge: .top)))
     }
 }
 
