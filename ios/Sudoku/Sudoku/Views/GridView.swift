@@ -128,8 +128,9 @@ struct GridLines: View {
             let thinLineWidth: CGFloat = isHighContrast ? 1.0 : 0.75
             let thickLineWidth: CGFloat = isHighContrast ? 3.0 : 2.0
 
-            let thinColor = Color.primary.opacity(isHighContrast ? 0.32 : 0.22)
-            let thickColor = Color.primary.opacity(isHighContrast ? 0.80 : 0.60)
+            // Slightly darker to make helper grid lines easier to see on iOS.
+            let thinColor = Color.primary.opacity(isHighContrast ? 0.42 : 0.30)
+            let thickColor = Color.primary.opacity(isHighContrast ? 0.88 : 0.70)
 
             let thinStyle = StrokeStyle(lineWidth: thinLineWidth, lineCap: .square, lineJoin: .miter)
             let thickStyle = StrokeStyle(lineWidth: thickLineWidth, lineCap: .square, lineJoin: .miter)
