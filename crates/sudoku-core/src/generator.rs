@@ -120,7 +120,7 @@ impl GeneratorConfig {
             max_attempts: 500,
             min_givens: 22,
             max_givens: 26,
-            min_se_rating: None,
+            min_se_rating: Some(3.0),
             max_se_rating: None,
         }
     }
@@ -132,7 +132,7 @@ impl GeneratorConfig {
             max_attempts: 1000,
             min_givens: 20,
             max_givens: 24,
-            min_se_rating: None,
+            min_se_rating: Some(4.5),
             max_se_rating: None,
         }
     }
@@ -144,7 +144,7 @@ impl GeneratorConfig {
             max_attempts: 2000,
             min_givens: 17,
             max_givens: 22,
-            min_se_rating: None,
+            min_se_rating: Some(6.0),
             max_se_rating: None,
         }
     }
@@ -207,6 +207,10 @@ impl Generator {
     /// Generate a puzzle with the current configuration
     pub fn generate_with_config(&mut self) -> Grid {
         let solver = Solver::new();
+        let target = self.config.difficulty;
+
+        // Track the best candidate seen (closest difficulty match with valid givens)
+        let mut best_candidate: Option<(Grid, Difficulty)> = None;
 
         for _ in 0..self.config.max_attempts {
             // Generate a filled grid
@@ -217,34 +221,77 @@ impl Generator {
 
             // Check difficulty
             let actual_difficulty = solver.rate_difficulty(&grid);
+            let given_count = grid.given_count();
+            let givens_ok =
+                given_count >= self.config.min_givens && given_count <= self.config.max_givens;
 
             // Accept if difficulty matches or is close
-            if self.difficulty_acceptable(actual_difficulty) {
-                let given_count = grid.given_count();
-                if given_count >= self.config.min_givens && given_count <= self.config.max_givens {
-                    // Check optional SE rating range
-                    if self.config.min_se_rating.is_some() || self.config.max_se_rating.is_some() {
-                        let se = solver.rate_se(&grid);
-                        if let Some(min) = self.config.min_se_rating {
-                            if se < min {
-                                continue;
-                            }
-                        }
-                        if let Some(max) = self.config.max_se_rating {
-                            if se > max {
-                                continue;
-                            }
+            if self.difficulty_acceptable(actual_difficulty) && givens_ok {
+                // Check optional SE rating range
+                if self.config.min_se_rating.is_some() || self.config.max_se_rating.is_some() {
+                    let se = solver.rate_se(&grid);
+                    if let Some(min) = self.config.min_se_rating {
+                        if se < min {
+                            // Still a valid difficulty match — track as candidate
+                            Self::update_best(
+                                &mut best_candidate,
+                                grid,
+                                actual_difficulty,
+                                target,
+                            );
+                            continue;
                         }
                     }
-                    return grid;
+                    if let Some(max) = self.config.max_se_rating {
+                        if se > max {
+                            Self::update_best(
+                                &mut best_candidate,
+                                grid,
+                                actual_difficulty,
+                                target,
+                            );
+                            continue;
+                        }
+                    }
                 }
+                return grid;
+            }
+
+            // Track as candidate if givens are in range (even if difficulty is off)
+            if givens_ok {
+                Self::update_best(&mut best_candidate, grid, actual_difficulty, target);
             }
         }
 
-        // If we couldn't hit target difficulty, return last attempt
-        let mut grid = self.generate_filled_grid();
-        self.remove_cells(&mut grid, &solver);
-        grid
+        // Return the best candidate seen, or generate one more as last resort
+        if let Some((grid, _)) = best_candidate {
+            grid
+        } else {
+            let mut grid = self.generate_filled_grid();
+            self.remove_cells(&mut grid, &solver);
+            grid
+        }
+    }
+
+    /// Update best candidate if the new one is closer to the target difficulty
+    fn update_best(
+        best: &mut Option<(Grid, Difficulty)>,
+        grid: Grid,
+        actual: Difficulty,
+        target: Difficulty,
+    ) {
+        let new_distance = (actual as i32 - target as i32).unsigned_abs();
+        match best {
+            Some((_, prev_diff)) => {
+                let prev_distance = (*prev_diff as i32 - target as i32).unsigned_abs();
+                if new_distance < prev_distance {
+                    *best = Some((grid, actual));
+                }
+            }
+            None => {
+                *best = Some((grid, actual));
+            }
+        }
     }
 
     /// Check if the actual difficulty is acceptable
