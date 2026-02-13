@@ -17,8 +17,9 @@ struct CellView: View {
         } else if hasSameValue && !cell.isEmpty {
             return Color.accentColor.opacity(0.15)
         } else if isRelated {
-            // Slightly stronger to make row/col/box helper shading easier to see on iOS.
-            return Color.secondary.opacity(0.12)
+            // Use a system fill color (instead of `secondary` + low opacity) so the
+            // row/col/box helper shading is visible across light/dark and bright screens.
+            return Color(uiColor: .secondarySystemFill)
         } else {
             return .clear
         }
@@ -58,7 +59,7 @@ struct CellView: View {
                 candidatesGrid(cell.candidates, opacity: 1.0)
             } else if showGhosts && !ghostCandidates.isEmpty {
                 // Ghost candidates
-                candidatesGrid(ghostCandidates, opacity: 0.25)
+                candidatesGrid(ghostCandidates, opacity: 0.40)
             }
 
             // Selected indicator
