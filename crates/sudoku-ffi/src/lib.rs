@@ -162,6 +162,30 @@ impl SudokuGame {
         })
     }
 
+    /// Create a new Sudoku game targeting a specific SE (Sudoku Explainer) rating
+    #[uniffi::constructor]
+    pub fn new_with_se_rating(target_se: f32) -> Arc<Self> {
+        let mut generator = Generator::new();
+        let grid = generator.generate_for_se(target_se);
+
+        let solver = Solver::new();
+        let rated = solver.rate_difficulty(&grid);
+        let solution = solver
+            .solve(&grid)
+            .expect("Generated puzzle should be solvable");
+
+        Arc::new(Self {
+            grid: Mutex::new(grid),
+            solution: Mutex::new(solution),
+            difficulty: Mutex::new(rated),
+            rated_difficulty: Mutex::new(rated),
+            undo_stack: Mutex::new(Vec::new()),
+            redo_stack: Mutex::new(Vec::new()),
+            hints_used: Mutex::new(0),
+            mistakes: Mutex::new(0),
+        })
+    }
+
     /// Make a move: place a value at a position
     pub fn make_move(&self, row: u8, col: u8, value: u8) -> MoveResult {
         if !(1..=9).contains(&value) {

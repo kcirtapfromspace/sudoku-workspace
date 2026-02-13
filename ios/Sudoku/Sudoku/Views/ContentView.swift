@@ -71,6 +71,7 @@ struct ContentView: View {
 struct MenuView: View {
     @EnvironmentObject var gameManager: GameManager
     @State private var showingDifficultyPicker = false
+    @State private var showingSERatingPicker = false
     @State private var showingSettings = false
     @State private var showingStats = false
     @State private var showingHistory = false
@@ -115,6 +116,16 @@ struct MenuView: View {
                     .buttonStyle(.bordered)
                     .controlSize(.large)
                     .accessibilityIdentifier("New Game")
+
+                    Button {
+                        showingSERatingPicker = true
+                    } label: {
+                        Label("SE Rating", systemImage: "gauge.medium")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.large)
+                    .accessibilityIdentifier("SE Rating")
                 }
                 .padding(.horizontal, 40)
 
@@ -178,6 +189,13 @@ struct MenuView: View {
                     showingDifficultyPicker = false
                 }
                 .presentationDetents([.medium])
+            }
+            .sheet(isPresented: $showingSERatingPicker) {
+                SERatingPickerView { targetSE in
+                    gameManager.newGameWithSE(targetSE: targetSE)
+                    showingSERatingPicker = false
+                }
+                .presentationDetents([.large])
             }
             .sheet(isPresented: $showingSettings) {
                 SettingsView()

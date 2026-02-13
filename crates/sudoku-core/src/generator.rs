@@ -148,6 +148,69 @@ impl GeneratorConfig {
             max_se_rating: None,
         }
     }
+
+    /// Create a config targeting a specific SE (Sudoku Explainer) rating.
+    ///
+    /// Derives givens range, attempt count, difficulty tier, symmetry, and
+    /// tolerance from the target SE value. Valid range is 1.5–11.0.
+    pub fn for_se_rating(target: f32) -> Self {
+        let target = target.clamp(1.5, 11.0);
+
+        // Map SE → base difficulty tier (for difficulty_acceptable() filtering)
+        let difficulty = match target {
+            t if t < 2.0 => Difficulty::Beginner,
+            t if t < 2.5 => Difficulty::Easy,
+            t if t < 3.4 => Difficulty::Medium,
+            t if t < 3.8 => Difficulty::Intermediate,
+            t if t < 4.5 => Difficulty::Hard,
+            t if t < 5.5 => Difficulty::Expert,
+            t if t < 7.0 => Difficulty::Master,
+            _ => Difficulty::Extreme,
+        };
+
+        // Map SE → givens range (inversely proportional)
+        let (min_givens, max_givens) = match target {
+            t if t < 2.0 => (42, 50),
+            t if t < 2.5 => (36, 45),
+            t if t < 3.4 => (32, 38),
+            t if t < 4.5 => (28, 34),
+            t if t < 5.5 => (24, 30),
+            t if t < 7.0 => (22, 26),
+            t if t < 9.0 => (19, 24),
+            _ => (17, 22),
+        };
+
+        // Map SE → attempt count (higher SE = more attempts needed)
+        let max_attempts = match target {
+            t if t < 2.5 => 50,
+            t if t < 3.8 => 100,
+            t if t < 5.0 => 300,
+            t if t < 6.0 => 500,
+            t if t < 7.5 => 1000,
+            t if t < 9.0 => 2000,
+            _ => 3000,
+        };
+
+        // Drop symmetry above SE 6.0 to increase search space
+        let symmetry = if target > 6.0 {
+            SymmetryType::None
+        } else {
+            SymmetryType::Rotational180
+        };
+
+        // Tolerance: ±0.3 for SE ≤ 5.0, ±0.5 above
+        let tolerance = if target <= 5.0 { 0.3 } else { 0.5 };
+
+        Self {
+            difficulty,
+            symmetry,
+            max_attempts,
+            min_givens,
+            max_givens,
+            min_se_rating: Some(target - tolerance),
+            max_se_rating: Some(target + tolerance),
+        }
+    }
 }
 
 /// Sudoku puzzle generator
@@ -185,6 +248,12 @@ impl Generator {
             config: GeneratorConfig::default(),
             rng: SimpleRng::with_seed(seed),
         }
+    }
+
+    /// Generate a puzzle targeting a specific SE rating
+    pub fn generate_for_se(&mut self, target_se: f32) -> Grid {
+        self.config = GeneratorConfig::for_se_rating(target_se);
+        self.generate_with_config()
     }
 
     /// Generate a puzzle with the configured difficulty
@@ -546,6 +615,45 @@ mod tests {
 
         let solver = Solver::new();
         assert!(solver.has_unique_solution(&grid));
+    }
+
+    #[test]
+    fn test_for_se_rating_config() {
+        // Low SE → Beginner tier, many givens
+        let config = GeneratorConfig::for_se_rating(1.5);
+        assert_eq!(config.difficulty, Difficulty::Beginner);
+        assert!(config.min_givens >= 42);
+        assert!(config.min_se_rating.unwrap() >= 1.2);
+        assert!(config.max_se_rating.unwrap() <= 1.8);
+
+        // Mid SE → Hard tier
+        let config = GeneratorConfig::for_se_rating(4.0);
+        assert_eq!(config.difficulty, Difficulty::Hard);
+        assert_eq!(config.symmetry, SymmetryType::Rotational180);
+
+        // High SE → no symmetry
+        let config = GeneratorConfig::for_se_rating(7.0);
+        assert_eq!(config.difficulty, Difficulty::Extreme);
+        assert_eq!(config.symmetry, SymmetryType::None);
+
+        // Extreme SE → clamped to 11.0
+        let config = GeneratorConfig::for_se_rating(15.0);
+        assert!(config.min_se_rating.unwrap() <= 11.0);
+
+        // Very low → clamped to 1.5
+        let config = GeneratorConfig::for_se_rating(0.5);
+        assert!(config.min_se_rating.unwrap() >= 1.2);
+    }
+
+    #[test]
+    fn test_generate_for_se() {
+        let mut generator = Generator::with_seed(42);
+        let grid = generator.generate_for_se(3.0);
+
+        // Should produce a valid puzzle with unique solution
+        let solver = Solver::new();
+        assert!(solver.has_unique_solution(&grid));
+        assert!(grid.given_count() >= 17);
     }
 
     #[test]

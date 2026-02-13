@@ -1,6 +1,20 @@
 import Foundation
 import Combine
 
+// MARK: - Demo Mode (Debug)
+
+private enum DemoMode {
+    static var isEnabled: Bool {
+        #if DEBUG
+        // When launching via `simctl`, set env vars using the `SIMCTL_CHILD_` prefix:
+        // `SIMCTL_CHILD_SUDOKU_DEMO_MODE=1 xcrun simctl launch ...`
+        return ProcessInfo.processInfo.environment["SUDOKU_DEMO_MODE"] == "1"
+        #else
+        return false
+        #endif
+    }
+}
+
 /// Manages overall game state, persistence, and statistics
 @MainActor
 class GameManager: ObservableObject {
@@ -20,6 +34,10 @@ class GameManager: ObservableObject {
     private let statisticsKey = "sudoku_statistics"
     private let settingsKey = "sudoku_settings"
     private let savedGameKey = "sudoku_saved_game"
+
+    #if DEBUG
+    private var demoTask: Task<Void, Never>?
+    #endif
 
     // MARK: - Initialization
 
@@ -43,8 +61,14 @@ class GameManager: ObservableObject {
         // Try to load saved game
         loadSavedGame()
 
-        // Authenticate with Game Center
-        gameCenter.authenticate()
+        // Authenticate with Game Center (skip in demo mode to avoid UI popups during recording).
+        if !DemoMode.isEnabled {
+            gameCenter.authenticate()
+        }
+
+        #if DEBUG
+        startDemoIfNeeded()
+        #endif
     }
 
     // MARK: - Game Management
@@ -93,6 +117,34 @@ class GameManager: ObservableObject {
         }
         if currentIndex < allCases.count - 1 {
             PuzzleCache.shared.prefetch(difficulty: allCases[currentIndex + 1])
+        }
+    }
+
+    func newGameWithSE(targetSE: Float) {
+        gameState = .loading
+
+        Task {
+            let sudokuGame = await Task.detached(priority: .userInitiated) {
+                SudokuGame.newWithSeRating(targetSe: targetSE)
+            }.value
+
+            // Derive difficulty from the rated result
+            let ratedDifficulty = Difficulty.from(sudokuGame.getRatedDifficulty())
+
+            let game = GameViewModel(cachedGame: sudokuGame, difficulty: ratedDifficulty)
+
+            if settings.autoFillCandidates {
+                game.fillAllCandidates()
+            } else {
+                game.clearAllCandidates()
+            }
+
+            currentGame = game
+            gameState = .playing
+            saveCurrentGame()
+
+            let fingerprint = game.getPuzzleFingerprint()
+            GameHistoryManager.shared.recordPuzzleStart(puzzleString: fingerprint, difficulty: ratedDifficulty)
         }
     }
 
@@ -198,4 +250,104 @@ class GameManager: ObservableObject {
     var hasSavedGame: Bool {
         currentGame != nil && gameState != .won && gameState != .lost
     }
+
+    // MARK: - Demo Mode (Debug)
+
+    #if DEBUG
+    private func startDemoIfNeeded() {
+        guard DemoMode.isEnabled else { return }
+
+        // Make demo recordings predictable and free of modals.
+        clearSavedGame()
+        currentGame = nil
+        gameState = .menu
+
+        // Settings that read well on video.
+        settings.theme = .light
+        settings.hapticsEnabled = false
+        settings.timerVisible = true
+        settings.ghostHintsEnabled = true
+        settings.highlightValidCells = true
+        settings.highlightRelatedCells = true
+        settings.highlightSameNumbers = true
+        settings.autoFillCandidates = false // keep ghost hints visible by default
+        settings.celebrationsEnabled = true
+        settings.showErrorsImmediately = true
+        saveSettings()
+
+        demoTask?.cancel()
+        demoTask = Task { [weak self] in
+            await self?.runDemoSequence()
+        }
+    }
+
+    private func runDemoSequence() async {
+        // Start a fresh puzzle.
+        newGame(difficulty: .beginner)
+
+        // Wait until the puzzle is loaded.
+        while !Task.isCancelled {
+            if gameState == .playing, currentGame != nil { break }
+            try? await Task.sleep(nanoseconds: 100_000_000) // 0.1s
+        }
+
+        guard !Task.isCancelled, let game = currentGame else { return }
+
+        func nap(_ seconds: Double) async {
+            let ns = UInt64(max(0, seconds) * 1_000_000_000)
+            try? await Task.sleep(nanoseconds: ns)
+        }
+
+        // Give the UI a beat to settle.
+        await nap(0.8)
+
+        // Drive a short, varied sequence of actions.
+        game.selectCell(row: 4, col: 4)
+        await nap(0.5)
+
+        for _ in 0..<4 {
+            if Task.isCancelled { return }
+            game.getHint()
+            await nap(0.7)
+            game.applyHint()
+            await nap(0.5)
+        }
+
+        // Show notes features briefly.
+        game.inputMode = .candidate
+        await nap(0.4)
+        game.fillAllCandidates()
+        await nap(0.9)
+        game.checkNotes()
+        await nap(0.8)
+        game.clearAllCandidates()
+        await nap(0.5)
+        game.inputMode = .normal
+
+        // Undo/redo to show history.
+        game.undo()
+        await nap(0.5)
+        game.redo()
+        await nap(0.7)
+
+        // Pause overlay.
+        pauseGame()
+        await nap(1.1)
+        resumeGame()
+        await nap(0.8)
+
+        // Flip to high contrast for a moment.
+        settings.theme = .highContrast
+        saveSettings()
+        await nap(1.0)
+
+        // Finish by rapidly applying hints until complete (or we run out of time).
+        let deadline = Date().addingTimeInterval(9.0)
+        while !Task.isCancelled, !game.isComplete, Date() < deadline {
+            game.getHint()
+            game.applyHint()
+            await nap(0.15)
+        }
+    }
+    #endif
 }
