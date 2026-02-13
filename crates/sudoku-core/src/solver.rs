@@ -93,13 +93,15 @@ pub enum Technique {
     PointingPair,
     BoxLineReduction,
 
-    // Expert (fish family)
+    // Expert (fish family + quads)
     XWing,
     FinnedXWing,
     Swordfish,
     FinnedSwordfish,
     Jellyfish,
     FinnedJellyfish,
+    NakedQuad,
+    HiddenQuad,
 
     // Master (wings + chains)
     XYWing,
@@ -112,6 +114,7 @@ pub enum Technique {
     AlsXz,
     AlsXyWing,
     UniqueRectangle,
+    BivalueUniversalGrave,
     NishioForcingChain,
     CellForcingChain,
     DynamicForcingChain,
@@ -142,7 +145,10 @@ impl Technique {
             Technique::UniqueRectangle => 4.6,
             Technique::Jellyfish => 5.2,
             Technique::FinnedJellyfish => 5.4,
+            Technique::NakedQuad => 5.0,
+            Technique::HiddenQuad => 5.4,
             Technique::AlsXz => 5.5,
+            Technique::BivalueUniversalGrave => 5.6,
             Technique::AIC => 6.0,
             Technique::AlsXyWing => 7.0,
             Technique::NishioForcingChain => 7.5,
@@ -170,6 +176,8 @@ impl std::fmt::Display for Technique {
             Technique::FinnedSwordfish => write!(f, "Finned Swordfish"),
             Technique::Jellyfish => write!(f, "Jellyfish"),
             Technique::FinnedJellyfish => write!(f, "Finned Jellyfish"),
+            Technique::NakedQuad => write!(f, "Naked Quad"),
+            Technique::HiddenQuad => write!(f, "Hidden Quad"),
             Technique::XYWing => write!(f, "XY-Wing"),
             Technique::XYZWing => write!(f, "XYZ-Wing"),
             Technique::WWing => write!(f, "W-Wing"),
@@ -178,6 +186,7 @@ impl std::fmt::Display for Technique {
             Technique::AlsXz => write!(f, "ALS-XZ"),
             Technique::AlsXyWing => write!(f, "ALS-XY-Wing"),
             Technique::UniqueRectangle => write!(f, "Unique Rectangle"),
+            Technique::BivalueUniversalGrave => write!(f, "BUG+1"),
             Technique::NishioForcingChain => write!(f, "Nishio Forcing Chain"),
             Technique::CellForcingChain => write!(f, "Cell Forcing Chain"),
             Technique::DynamicForcingChain => write!(f, "Dynamic Forcing Chain"),
@@ -313,6 +322,9 @@ impl Solver {
         if let Some(hint) = self.find_finned_jellyfish(&working) {
             return Some(hint);
         }
+        if let Some(hint) = self.find_naked_quad(&working) {
+            return Some(hint);
+        }
         if let Some(hint) = self.find_xy_wing(&working) {
             return Some(hint);
         }
@@ -332,6 +344,9 @@ impl Solver {
             return Some(hint);
         }
         if let Some(hint) = self.find_als_xy_wing(&working) {
+            return Some(hint);
+        }
+        if let Some(hint) = self.find_bug(&working) {
             return Some(hint);
         }
         if let Some(hint) = self.find_nishio_forcing_chain(&working) {
@@ -414,6 +429,8 @@ impl Solver {
             try_technique!(apply_finned_swordfish, Technique::FinnedSwordfish);
             try_technique!(apply_jellyfish, Technique::Jellyfish);
             try_technique!(apply_finned_jellyfish, Technique::FinnedJellyfish);
+            try_technique!(apply_naked_quads, Technique::NakedQuad);
+            try_technique!(apply_hidden_quads, Technique::HiddenQuad);
             try_technique!(apply_xy_wing, Technique::XYWing);
             try_technique!(apply_xyz_wing, Technique::XYZWing);
             try_technique!(apply_w_wing, Technique::WWing);
@@ -422,6 +439,7 @@ impl Solver {
             try_technique!(apply_als_xz, Technique::AlsXz);
             try_technique!(apply_als_xy_wing, Technique::AlsXyWing);
             try_technique!(apply_unique_rectangle, Technique::UniqueRectangle);
+            try_technique!(apply_bug, Technique::BivalueUniversalGrave);
             try_technique!(apply_nishio_forcing_chain, Technique::NishioForcingChain);
             try_technique!(apply_cell_forcing_chain, Technique::CellForcingChain);
             try_technique!(apply_dynamic_forcing_chain, Technique::DynamicForcingChain);
@@ -452,7 +470,9 @@ impl Solver {
             | Technique::Swordfish
             | Technique::FinnedSwordfish
             | Technique::Jellyfish
-            | Technique::FinnedJellyfish => Difficulty::Expert,
+            | Technique::FinnedJellyfish
+            | Technique::NakedQuad
+            | Technique::HiddenQuad => Difficulty::Expert,
             Technique::XYWing
             | Technique::XYZWing
             | Technique::WWing
@@ -461,6 +481,7 @@ impl Solver {
             Technique::AlsXz
             | Technique::AlsXyWing
             | Technique::UniqueRectangle
+            | Technique::BivalueUniversalGrave
             | Technique::NishioForcingChain
             | Technique::CellForcingChain
             | Technique::DynamicForcingChain
@@ -973,6 +994,162 @@ impl Solver {
                                     return true;
                                 }
                             }
+                        }
+                    }
+                }
+            }
+        }
+        false
+    }
+
+    // ==================== Naked Quad ====================
+
+    fn find_naked_quad(&self, grid: &Grid) -> Option<Hint> {
+        for unit_type in 0..3 {
+            for unit_idx in 0..9 {
+                let positions = match unit_type {
+                    0 => Self::row_positions(unit_idx),
+                    1 => Self::col_positions(unit_idx),
+                    _ => Self::box_positions(unit_idx),
+                };
+                let unit_name = match unit_type {
+                    0 => format!("row {}", unit_idx + 1),
+                    1 => format!("column {}", unit_idx + 1),
+                    _ => format!("box {}", unit_idx + 1),
+                };
+
+                let empty_cells = self.empty_cells(grid, &positions);
+                if empty_cells.len() < 5 {
+                    continue;
+                }
+
+                // Find four cells whose combined candidates are exactly 4 values
+                for i in 0..empty_cells.len() {
+                    for j in (i + 1)..empty_cells.len() {
+                        for k in (j + 1)..empty_cells.len() {
+                            for l in (k + 1)..empty_cells.len() {
+                                let pos1 = empty_cells[i];
+                                let pos2 = empty_cells[j];
+                                let pos3 = empty_cells[k];
+                                let pos4 = empty_cells[l];
+
+                                let cand1 = grid.get_candidates(pos1);
+                                let cand2 = grid.get_candidates(pos2);
+                                let cand3 = grid.get_candidates(pos3);
+                                let cand4 = grid.get_candidates(pos4);
+
+                                let combined =
+                                    cand1.union(&cand2).union(&cand3).union(&cand4);
+
+                                if combined.count() == 4
+                                    && cand1.count() <= 4
+                                    && cand2.count() <= 4
+                                    && cand3.count() <= 4
+                                    && cand4.count() <= 4
+                                {
+                                    let quad_values: Vec<u8> = combined.iter().collect();
+                                    let quad_pos = [pos1, pos2, pos3, pos4];
+
+                                    for &other_pos in &empty_cells {
+                                        if quad_pos.contains(&other_pos) {
+                                            continue;
+                                        }
+                                        let other_cand = grid.get_candidates(other_pos);
+                                        let to_remove: Vec<u8> = quad_values
+                                            .iter()
+                                            .filter(|&&v| other_cand.contains(v))
+                                            .copied()
+                                            .collect();
+                                        if !to_remove.is_empty() {
+                                            return Some(Hint {
+                                                technique: Technique::NakedQuad,
+                                                hint_type: HintType::EliminateCandidates {
+                                                    pos: other_pos,
+                                                    values: to_remove,
+                                                },
+                                                explanation: format!(
+                                                    "Naked quad {:?} in {} at ({},{}), ({},{}), ({},{}), ({},{}).",
+                                                    quad_values, unit_name,
+                                                    pos1.row + 1, pos1.col + 1,
+                                                    pos2.row + 1, pos2.col + 1,
+                                                    pos3.row + 1, pos3.col + 1,
+                                                    pos4.row + 1, pos4.col + 1
+                                                ),
+                                                involved_cells: vec![pos1, pos2, pos3, pos4, other_pos],
+                                            });
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    fn apply_naked_quads(&self, grid: &mut Grid) -> bool {
+        if let Some(hint) = self.find_naked_quad(grid) {
+            if let HintType::EliminateCandidates { pos, values } = hint.hint_type {
+                for value in values {
+                    grid.cell_mut(pos).remove_candidate(value);
+                }
+                return true;
+            }
+        }
+        false
+    }
+
+    // ==================== Hidden Quad ====================
+
+    fn apply_hidden_quads(&self, grid: &mut Grid) -> bool {
+        for unit_type in 0..3 {
+            for unit_idx in 0..9 {
+                let positions = match unit_type {
+                    0 => Self::row_positions(unit_idx),
+                    1 => Self::col_positions(unit_idx),
+                    _ => Self::box_positions(unit_idx),
+                };
+
+                let empty_cells = self.empty_cells(grid, &positions);
+                if empty_cells.len() < 5 {
+                    continue;
+                }
+
+                // Find four values that appear in exactly 4 cells
+                let values: Vec<u8> = (1..=9).collect();
+                for combo in Self::combinations(&values, 4) {
+                    let v1 = combo[0];
+                    let v2 = combo[1];
+                    let v3 = combo[2];
+                    let v4 = combo[3];
+
+                    let mut cells_with_values: Vec<Position> = Vec::new();
+                    for &pos in &empty_cells {
+                        let cand = grid.get_candidates(pos);
+                        if cand.contains(v1)
+                            || cand.contains(v2)
+                            || cand.contains(v3)
+                            || cand.contains(v4)
+                        {
+                            cells_with_values.push(pos);
+                        }
+                    }
+
+                    if cells_with_values.len() == 4 {
+                        let mut eliminated = false;
+                        for &pos in &cells_with_values {
+                            let cand = grid.get_candidates(pos);
+                            for v in cand.iter() {
+                                if v != v1 && v != v2 && v != v3 && v != v4 {
+                                    grid.cell_mut(pos).remove_candidate(v);
+                                    eliminated = true;
+                                }
+                            }
+                        }
+                        if eliminated {
+                            return true;
                         }
                     }
                 }
@@ -2949,6 +3126,93 @@ impl Solver {
         false
     }
 
+    // ==================== BUG+1 (Bivalue Universal Grave) ====================
+
+    /// Detect BUG+1: if every empty cell has exactly 2 candidates except one cell
+    /// with exactly 3 candidates, the extra candidate in that cell must be its value.
+    /// A BUG state (all bivalue) has multiple solutions, violating uniqueness.
+    fn find_bug(&self, grid: &Grid) -> Option<Hint> {
+        let empty = grid.empty_positions();
+        if empty.is_empty() {
+            return None;
+        }
+
+        let mut trivalue_cell: Option<Position> = None;
+
+        for &pos in &empty {
+            let count = grid.get_candidates(pos).count();
+            if count == 2 {
+                continue;
+            }
+            if count == 3 && trivalue_cell.is_none() {
+                trivalue_cell = Some(pos);
+            } else {
+                // More than one non-bivalue cell, or a cell with 4+ candidates — not BUG+1
+                return None;
+            }
+        }
+
+        let tri_pos = trivalue_cell?;
+        let cands = grid.get_candidates(tri_pos);
+
+        // Find the "extra" candidate: the one that appears 3 times in its row/col/box
+        // In a BUG state, each candidate appears exactly twice per unit.
+        // The extra candidate appears 3 times in at least one unit.
+        for val in cands.iter() {
+            let row_count = (0..9)
+                .filter(|&c| {
+                    let p = Position::new(tri_pos.row, c);
+                    p != tri_pos && grid.cell(p).is_empty() && grid.get_candidates(p).contains(val)
+                })
+                .count();
+            let col_count = (0..9)
+                .filter(|&r| {
+                    let p = Position::new(r, tri_pos.col);
+                    p != tri_pos && grid.cell(p).is_empty() && grid.get_candidates(p).contains(val)
+                })
+                .count();
+            let box_positions = Self::box_positions(tri_pos.box_index());
+            let box_count = box_positions
+                .iter()
+                .filter(|&&p| {
+                    p != tri_pos && grid.cell(p).is_empty() && grid.get_candidates(p).contains(val)
+                })
+                .count();
+
+            // In BUG state, each value appears exactly 2 times per unit.
+            // The extra value has an odd count (appears 2+1=3 times including tri_pos) in some unit.
+            // So the count excluding tri_pos would be 2 (making total 3, odd) for the extra value.
+            let is_extra = row_count == 2 || col_count == 2 || box_count == 2;
+
+            if is_extra {
+                return Some(Hint {
+                    technique: Technique::BivalueUniversalGrave,
+                    hint_type: HintType::SetValue {
+                        pos: tri_pos,
+                        value: val,
+                    },
+                    explanation: format!(
+                        "BUG+1: all cells are bivalue except ({}, {}). {} must be {} to avoid a deadly pattern.",
+                        tri_pos.row + 1, tri_pos.col + 1, val, val
+                    ),
+                    involved_cells: vec![tri_pos],
+                });
+            }
+        }
+        None
+    }
+
+    fn apply_bug(&self, grid: &mut Grid) -> bool {
+        if let Some(hint) = self.find_bug(grid) {
+            if let HintType::SetValue { pos, value } = hint.hint_type {
+                grid.set_cell_unchecked(pos, Some(value));
+                grid.recalculate_candidates();
+                return true;
+            }
+        }
+        false
+    }
+
     // ==================== Forcing Chains Infrastructure ====================
 
     /// Check if a grid has a contradiction: any empty cell with no candidates,
@@ -3081,6 +3345,8 @@ impl Solver {
             if !progress { progress |= self.apply_finned_swordfish(&mut g); }
             if !progress { progress |= self.apply_jellyfish(&mut g); }
             if !progress { progress |= self.apply_finned_jellyfish(&mut g); }
+            if !progress { progress |= self.apply_naked_quads(&mut g); }
+            if !progress { progress |= self.apply_hidden_quads(&mut g); }
             if !progress { progress |= self.apply_xy_wing(&mut g); }
             if !progress { progress |= self.apply_xyz_wing(&mut g); }
             if !progress { progress |= self.apply_w_wing(&mut g); }
@@ -3089,6 +3355,7 @@ impl Solver {
             if !progress { progress |= self.apply_als_xz(&mut g); }
             if !progress { progress |= self.apply_als_xy_wing(&mut g); }
             if !progress { progress |= self.apply_unique_rectangle(&mut g); }
+            if !progress { progress |= self.apply_bug(&mut g); }
             if !progress {
                 break;
             }
@@ -3564,7 +3831,13 @@ mod tests {
         assert!(Technique::NakedSingle.se_rating() < Technique::NakedPair.se_rating());
         assert!(Technique::NakedPair.se_rating() < Technique::XWing.se_rating());
         assert!(Technique::XWing.se_rating() < Technique::FinnedXWing.se_rating());
+        assert!(Technique::NakedQuad.se_rating() <= Technique::Jellyfish.se_rating());
+        assert!(Technique::Jellyfish.se_rating() <= Technique::FinnedJellyfish.se_rating());
+        assert!(Technique::FinnedJellyfish.se_rating() <= Technique::HiddenQuad.se_rating());
+        assert!(Technique::HiddenQuad.se_rating() < Technique::AlsXz.se_rating());
         assert!(Technique::XYWing.se_rating() < Technique::XChain.se_rating());
+        assert!(Technique::AlsXz.se_rating() < Technique::BivalueUniversalGrave.se_rating());
+        assert!(Technique::BivalueUniversalGrave.se_rating() < Technique::AIC.se_rating());
         assert!(Technique::AlsXz.se_rating() < Technique::AIC.se_rating());
         assert!(Technique::AIC.se_rating() < Technique::AlsXyWing.se_rating());
         assert!(Technique::AlsXyWing.se_rating() < Technique::NishioForcingChain.se_rating());
@@ -3605,6 +3878,12 @@ mod tests {
         assert_eq!(
             Technique::DynamicForcingChain.to_string(),
             "Dynamic Forcing Chain"
+        );
+        assert_eq!(Technique::NakedQuad.to_string(), "Naked Quad");
+        assert_eq!(Technique::HiddenQuad.to_string(), "Hidden Quad");
+        assert_eq!(
+            Technique::BivalueUniversalGrave.to_string(),
+            "BUG+1"
         );
     }
 
