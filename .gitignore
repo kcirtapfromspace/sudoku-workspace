@@ -1,6 +1,8 @@
 # Build artifacts
 /target/
 **/target/
+build/
+DerivedData/
 
 # WASM build output (can be regenerated)
 crates/sudoku-wasm/www/pkg/
@@ -17,3 +19,31 @@ Thumbs.db
 
 # Logs
 *.log
+
+# iOS / Xcode
+*.xcodeproj/
+*.xcworkspace/
+xcshareddata/
+*.gcno
+*.xcscmblueprint
+*.xccheckout
+*.moved-aside
+*.xcuserstate
+*.swiftpm
+
+# Generated Artifacts
+ios/Frameworks/
+ios/Sudoku/Sudoku/Generated/
+
+# CocoaPods
+Pods/
+
+# Fastlane
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots
+fastlane/test_output
+
+# Ruby / Bundler
+.bundle/
+vendor/bundle/
