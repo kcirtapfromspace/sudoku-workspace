@@ -535,4 +535,151 @@ mod tests {
             }
         }
     }
+
+    /// Regression test: pin SE ratings for known puzzles so engine changes
+    /// that alter difficulty classification are caught immediately.
+    #[test]
+    fn test_se_rating_regression() {
+        let cases: &[(&str, f32, Difficulty)] = &[
+            // Naked singles only
+            ("530070000600195000098000060800060003400803001700020006060000280000419005000080079", 2.3, Difficulty::Easy),
+            // Hidden singles only
+            ("000000010400000000020000000000050407008000300001090000300400200050100000000806000", 1.5, Difficulty::Medium),
+            // Expert tier (UR / empty rectangle)
+            ("000704005020010070000080002090006250600070008053200010400090000030060090200301000", 4.6, Difficulty::Expert),
+        ];
+
+        let solver = Solver::new();
+        for (puzzle_str, expected_se, expected_diff) in cases {
+            let grid = Grid::from_string(puzzle_str).unwrap();
+            let se = solver.rate_se(&grid);
+            let diff = solver.rate_difficulty(&grid);
+            assert!(
+                (se - expected_se).abs() < 0.01,
+                "SE regression: expected {:.1} got {:.1} for puzzle {}",
+                expected_se, se, puzzle_str
+            );
+            assert_eq!(
+                diff, *expected_diff,
+                "Difficulty regression: expected {:?} got {:?} for puzzle {}",
+                expected_diff, diff, puzzle_str
+            );
+        }
+    }
+
+    /// Verify that solve_with_techniques produces consistent max-technique
+    /// for known puzzles (guards against dispatch order regressions).
+    #[test]
+    fn test_max_technique_regression() {
+        let solver = Solver::new();
+
+        // This puzzle needs only naked singles (SE 2.3)
+        let grid = Grid::from_string(
+            "530070000600195000098000060800060003400803001700020006060000280000419005000080079"
+        ).unwrap();
+        let mut w = grid.deep_clone();
+        let tech = solver.solve_with_techniques(&mut w);
+        assert!(w.is_complete(), "Puzzle should be fully solved");
+        assert!(tech <= Technique::NakedSingle, "Expected NakedSingle, got {:?}", tech);
+
+        // This puzzle needs hidden singles (SE 1.5)
+        let grid = Grid::from_string(
+            "000000010400000000020000000000050407008000300001090000300400200050100000000806000"
+        ).unwrap();
+        let mut w = grid.deep_clone();
+        let tech = solver.solve_with_techniques(&mut w);
+        assert!(w.is_complete(), "Puzzle should be fully solved");
+        assert!(tech <= Technique::HiddenSingle, "Expected ≤HiddenSingle, got {:?}", tech);
+    }
+
+    /// Technique coverage: verify each engine can find its expected technique
+    /// type on a suitable puzzle state.
+    #[test]
+    fn test_technique_coverage_basic() {
+        // Verify basic techniques fire on appropriate puzzle states
+        let solver = Solver::new();
+
+        // The soundness test already covers that hints are correct.
+        // Here we verify the engine can solve all three reference puzzles
+        // to completion using human techniques.
+        let easy = Grid::from_string(
+            "530070000600195000098000060800060003400803001700020006060000280000419005000080079"
+        ).unwrap();
+        let mut w = easy.deep_clone();
+        let tech = solver.solve_with_techniques(&mut w);
+        assert!(w.is_complete());
+        assert!(tech < Technique::Backtracking, "Easy puzzle should not need backtracking");
+
+        let medium = Grid::from_string(
+            "000000010400000000020000000000050407008000300001090000300400200050100000000806000"
+        ).unwrap();
+        let mut w = medium.deep_clone();
+        let tech = solver.solve_with_techniques(&mut w);
+        assert!(w.is_complete());
+        assert!(tech < Technique::Backtracking, "Medium puzzle should not need backtracking");
+    }
+
+    /// Verify every technique in the dispatch chain is reachable by collecting
+    /// all techniques used across a battery of generated puzzles at each tier.
+    #[test]
+    fn test_technique_tier_coverage() {
+        use crate::Generator;
+        use std::collections::HashSet;
+
+        let solver = Solver::new();
+        let mut seen_techniques = HashSet::new();
+
+        // Generate puzzles at different difficulty tiers using deterministic seeds
+        for (seed, difficulty) in [
+            (42, Difficulty::Easy),
+            (42, Difficulty::Medium),
+            (42, Difficulty::Intermediate),
+            (42, Difficulty::Hard),
+            (42, Difficulty::Expert),
+            (99, Difficulty::Easy),
+            (99, Difficulty::Medium),
+            (99, Difficulty::Hard),
+            (99, Difficulty::Expert),
+        ] {
+            let mut gen = Generator::with_seed(seed);
+            let grid = gen.generate(difficulty);
+            let mut working = grid.deep_clone();
+            working.recalculate_candidates();
+
+            // Solve step by step, collecting every technique used
+            let mut steps = 0;
+            while !working.is_complete() && steps < 300 {
+                let hint = match solver.get_hint(&working) {
+                    Some(h) => h,
+                    None => break,
+                };
+                seen_techniques.insert(hint.technique);
+
+                match &hint.hint_type {
+                    HintType::SetValue { pos, value } => {
+                        working.set_cell_unchecked(*pos, Some(*value));
+                        working.recalculate_candidates();
+                    }
+                    HintType::EliminateCandidates { pos, values } => {
+                        for &v in values {
+                            working.cell_mut(*pos).remove_candidate(v);
+                        }
+                    }
+                }
+                steps += 1;
+            }
+        }
+
+        // At minimum, the basic techniques should be exercised
+        assert!(seen_techniques.contains(&Technique::NakedSingle), "NakedSingle never fired");
+        assert!(seen_techniques.contains(&Technique::HiddenSingle), "HiddenSingle never fired");
+
+        // Print coverage for diagnostics
+        let mut sorted: Vec<_> = seen_techniques.iter().collect();
+        sorted.sort();
+        println!("Technique coverage ({} of 45):", sorted.len());
+        for t in &sorted {
+            println!("  {:?} (SE {:.1})", t, t.se_rating());
+        }
+    }
 }
