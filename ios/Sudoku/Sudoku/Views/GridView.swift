@@ -31,6 +31,7 @@ struct GridView: View {
                                 ghostCandidates: gameManager.settings.ghostHintsEnabled ? game.getValidCandidates(row: row, col: col) : [],
                                 showGhosts: gameManager.settings.ghostHintsEnabled,
                                 showErrors: forceShowErrors || gameManager.settings.showErrorsImmediately,
+                                hintRole: game.hintCellRole(row: row, col: col),
                                 size: cellSize
                             )
                             .modifier(WiggleModifier(

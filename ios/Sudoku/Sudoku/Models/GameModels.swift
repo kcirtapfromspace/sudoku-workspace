@@ -70,6 +70,31 @@ struct HintModel {
     let explanation: String
     let technique: String
     let seRating: Float
+    let involvedCells: [(row: Int, col: Int)]
+}
+
+// MARK: - Hint Detail Level
+
+enum HintDetailLevel: Int {
+    case none = -1
+    case summary = 0
+    case proofDetail = 1
+}
+
+// MARK: - Hint Cell Role
+
+enum HintCellRole: UInt8 {
+    case none = 0
+    case target = 1
+    case involved = 2
+    case chainOn = 3
+    case chainOff = 4
+    case fishBase = 5
+    case fishCover = 6
+    case fishFin = 7
+    case urFloor = 8
+    case urRoof = 9
+    case alsGroup = 10
 }
 
 // Note: MoveResult is provided by the Rust engine (SudokuEngine.swift)

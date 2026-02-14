@@ -18,6 +18,9 @@ use explain::{Finding, InferenceResult};
 use fabric::{idx_to_pos, CandidateFabric};
 
 pub use types::{Difficulty, Hint, HintType, Technique};
+pub use explain::{
+    AlsProofDescriptor, ForcingSource, LinkType, Polarity, ProofCertificate,
+};
 
 /// Unit struct solver — stateless, all state is per-call.
 pub struct Solver;
@@ -534,6 +537,46 @@ mod tests {
                 steps += 1;
             }
         }
+    }
+
+    /// Verify that hints from Expert+ puzzles carry ProofCertificate data.
+    #[test]
+    fn test_hint_carries_proof_certificate() {
+        let solver = Solver::new();
+
+        // Expert puzzle that requires UR / fish — should produce proof certificates
+        let puzzle = "000704005020010070000080002090006250600070008053200010400090000030060090200301000";
+        let grid = Grid::from_string(puzzle).unwrap();
+        let mut working = grid.deep_clone();
+        working.recalculate_candidates();
+
+        let mut found_proof = false;
+        let mut steps = 0;
+        while !working.is_complete() && steps < 300 {
+            let hint = match solver.get_hint(&working) {
+                Some(h) => h,
+                None => break,
+            };
+
+            if hint.proof.is_some() {
+                found_proof = true;
+            }
+
+            match &hint.hint_type {
+                HintType::SetValue { pos, value } => {
+                    working.set_cell_unchecked(*pos, Some(*value));
+                    working.recalculate_candidates();
+                }
+                HintType::EliminateCandidates { pos, values } => {
+                    for &v in values {
+                        working.cell_mut(*pos).remove_candidate(v);
+                    }
+                }
+            }
+            steps += 1;
+        }
+
+        assert!(found_proof, "Expected at least one hint with a ProofCertificate on an Expert puzzle");
     }
 
     /// Regression test: pin SE ratings for known puzzles so engine changes

@@ -10,6 +10,15 @@ pub const MAX_MISTAKES: usize = 3;
 /// Estimated total puzzles in the puzzle universe (~10^30)
 pub const TOTAL_PUZZLE_UNIVERSE: f64 = 1e30;
 
+/// Level of hint detail shown to the player
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HintDetailLevel {
+    /// Technique name + involved cell highlighting
+    Summary,
+    /// Full proof coloring (AIC polarity, fish sectors, UR floor/roof, etc.)
+    ProofDetail,
+}
+
 /// Input mode
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum InputMode {
@@ -205,6 +214,8 @@ pub struct GameState {
     message_timer: u32,
     /// Current hint
     current_hint: Option<Hint>,
+    /// Hint detail level (Summary vs ProofDetail)
+    hint_detail: HintDetailLevel,
     /// Undo stack
     undo_stack: Vec<(Position, Option<u8>)>,
     /// Redo stack
@@ -255,6 +266,7 @@ impl GameState {
             message: None,
             message_timer: 0,
             current_hint: None,
+            hint_detail: HintDetailLevel::Summary,
             undo_stack: Vec::new(),
             redo_stack: Vec::new(),
             frame: 0,
@@ -300,6 +312,7 @@ impl GameState {
             message: None,
             message_timer: 0,
             current_hint: None,
+            hint_detail: HintDetailLevel::Summary,
             undo_stack: Vec::new(),
             redo_stack: Vec::new(),
             frame: 0,
@@ -341,6 +354,7 @@ impl GameState {
             message: None,
             message_timer: 0,
             current_hint: None,
+            hint_detail: HintDetailLevel::Summary,
             undo_stack: Vec::new(),
             redo_stack: Vec::new(),
             frame: 0,
@@ -440,8 +454,11 @@ impl GameState {
 
     /// Handle keyboard input, returns true if game should continue
     pub fn handle_key(&mut self, key: &str, shift: bool, ctrl: bool) -> bool {
-        // Clear hint on any key
-        self.current_hint = None;
+        // Clear hint on any key except "?" (which progresses hint detail)
+        if key != "?" {
+            self.current_hint = None;
+            self.hint_detail = HintDetailLevel::Summary;
+        }
 
         match self.screen {
             ScreenState::Win | ScreenState::Lose => self.handle_endgame_key(key),
@@ -586,10 +603,14 @@ impl GameState {
                 }
             }
 
-            // Hint
+            // Hint (progressive: first press = Summary, second = ProofDetail)
             "?" => {
-                if let Some(hint) = self.get_hint() {
+                if self.current_hint.is_some() {
+                    // Already showing a hint — upgrade to proof detail
+                    self.hint_detail = HintDetailLevel::ProofDetail;
+                } else if let Some(hint) = self.get_hint() {
                     self.current_hint = Some(hint);
+                    self.hint_detail = HintDetailLevel::Summary;
                     self.hints_used += 1;
                 } else {
                     self.show_message("No hint available");
@@ -831,6 +852,9 @@ impl GameState {
     pub fn current_hint(&self) -> Option<&Hint> {
         self.current_hint.as_ref()
     }
+    pub fn hint_detail(&self) -> HintDetailLevel {
+        self.hint_detail
+    }
     pub fn frame(&self) -> u32 {
         self.frame
     }
@@ -1044,6 +1068,7 @@ impl GameState {
             message: state.message,
             message_timer: 0,
             current_hint: None,
+            hint_detail: HintDetailLevel::Summary,
             undo_stack: Vec::new(),
             redo_stack: Vec::new(),
             frame: 0,

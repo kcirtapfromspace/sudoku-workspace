@@ -1,5 +1,25 @@
 import SwiftUI
 
+// MARK: - Hint Colors
+
+struct HintColors {
+    static func color(for role: HintCellRole) -> Color? {
+        switch role {
+        case .none: return nil
+        case .target: return Color(red: 0.39, green: 0.24, blue: 0.12).opacity(0.6)
+        case .involved: return Color(red: 0.24, green: 0.27, blue: 0.20).opacity(0.5)
+        case .chainOn: return Color.green.opacity(0.3)
+        case .chainOff: return Color.red.opacity(0.3)
+        case .fishBase: return Color.blue.opacity(0.3)
+        case .fishCover: return Color.orange.opacity(0.3)
+        case .fishFin: return Color.yellow.opacity(0.3)
+        case .urFloor: return Color(red: 0.20, green: 0.31, blue: 0.47).opacity(0.4)
+        case .urRoof: return Color(red: 0.47, green: 0.20, blue: 0.35).opacity(0.4)
+        case .alsGroup: return Color.purple.opacity(0.3)
+        }
+    }
+}
+
 struct CellView: View {
     let cell: CellModel
     let isSelected: Bool
@@ -9,11 +29,16 @@ struct CellView: View {
     let ghostCandidates: Set<Int>
     let showGhosts: Bool
     let showErrors: Bool  // Whether to show error indication
+    var hintRole: HintCellRole = .none
     let size: CGFloat
 
     private var backgroundColor: Color {
         if isSelected {
             return Color.accentColor.opacity(0.3)
+        } else if hintRole == .target {
+            return HintColors.color(for: .target)!
+        } else if let hintColor = HintColors.color(for: hintRole) {
+            return hintColor
         } else if hasSameValue && !cell.isEmpty {
             return Color.accentColor.opacity(0.15)
         } else if isRelated {

@@ -1,9 +1,165 @@
 //! Canvas rendering for terminal-like Sudoku UI
 
-use crate::game::{GameState, InputMode, ScreenState, MAX_MISTAKES};
-use crate::theme::Theme;
-use sudoku_core::Position;
+use crate::game::{GameState, HintDetailLevel, InputMode, ScreenState, MAX_MISTAKES};
+use crate::theme::{Color, Theme};
+use sudoku_core::{Hint, Polarity, Position, ProofCertificate};
 use web_sys::CanvasRenderingContext2d;
+
+/// Role of a cell in the current hint visualization.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum HintCellRole {
+    None,
+    /// Target cell (placement or elimination)
+    Target,
+    /// Generic involved cell
+    Involved,
+    /// AIC ON-polarity node
+    ChainOn,
+    /// AIC OFF-polarity node
+    ChainOff,
+    /// Fish base sector cell
+    FishBase,
+    /// Fish cover sector cell
+    FishCover,
+    /// Fish fin cell
+    FishFin,
+    /// UR floor (bivalue cell)
+    UrFloor,
+    /// UR roof (extra candidates)
+    UrRoof,
+    /// ALS group member
+    AlsGroup,
+}
+
+/// Return cells belonging to a sector index.
+/// Convention: 0..8=rows, 9..17=cols, 18..26=boxes.
+fn sector_cells(sector: usize) -> Vec<usize> {
+    if sector < 9 {
+        // Row
+        let row = sector;
+        (0..9).map(|col| row * 9 + col).collect()
+    } else if sector < 18 {
+        // Column
+        let col = sector - 9;
+        (0..9).map(|row| row * 9 + col).collect()
+    } else {
+        // Box
+        let b = sector - 18;
+        let br = (b / 3) * 3;
+        let bc = (b % 3) * 3;
+        let mut cells = Vec::with_capacity(9);
+        for r in br..br + 3 {
+            for c in bc..bc + 3 {
+                cells.push(r * 9 + c);
+            }
+        }
+        cells
+    }
+}
+
+/// Compute hint cell roles for every cell based on current hint and detail level.
+fn compute_hint_roles(hint: &Hint, detail: HintDetailLevel) -> [HintCellRole; 81] {
+    let mut roles = [HintCellRole::None; 81];
+
+    // Always mark the target cell
+    let target_idx = match &hint.hint_type {
+        sudoku_core::HintType::SetValue { pos, .. }
+        | sudoku_core::HintType::EliminateCandidates { pos, .. } => pos.row * 9 + pos.col,
+    };
+    roles[target_idx] = HintCellRole::Target;
+
+    // Mark involved cells
+    for pos in &hint.involved_cells {
+        let idx = pos.row * 9 + pos.col;
+        if roles[idx] == HintCellRole::None {
+            roles[idx] = HintCellRole::Involved;
+        }
+    }
+
+    // At ProofDetail, override with proof-specific roles
+    if detail == HintDetailLevel::ProofDetail {
+        if let Some(ref proof) = hint.proof {
+            match proof {
+                ProofCertificate::Fish { base_sectors, cover_sectors, fins, .. } => {
+                    for &s in base_sectors {
+                        for idx in sector_cells(s) {
+                            if roles[idx] == HintCellRole::Involved {
+                                roles[idx] = HintCellRole::FishBase;
+                            }
+                        }
+                    }
+                    for &s in cover_sectors {
+                        for idx in sector_cells(s) {
+                            if roles[idx] == HintCellRole::Involved {
+                                roles[idx] = HintCellRole::FishCover;
+                            }
+                        }
+                    }
+                    for &idx in fins {
+                        if idx < 81 {
+                            roles[idx] = HintCellRole::FishFin;
+                        }
+                    }
+                }
+                ProofCertificate::Aic { chain, .. } => {
+                    for &(cell, _digit, polarity) in chain {
+                        if cell < 81 {
+                            roles[cell] = match polarity {
+                                Polarity::On => HintCellRole::ChainOn,
+                                Polarity::Off => HintCellRole::ChainOff,
+                            };
+                        }
+                    }
+                }
+                ProofCertificate::Uniqueness { floor_cells, roof_cells, .. } => {
+                    for &idx in floor_cells {
+                        if idx < 81 {
+                            roles[idx] = HintCellRole::UrFloor;
+                        }
+                    }
+                    for &idx in roof_cells {
+                        if idx < 81 {
+                            roles[idx] = HintCellRole::UrRoof;
+                        }
+                    }
+                }
+                ProofCertificate::Als { als_chain, .. } => {
+                    for als in als_chain {
+                        for &idx in &als.cells {
+                            if idx < 81 && roles[idx] != HintCellRole::Target {
+                                roles[idx] = HintCellRole::AlsGroup;
+                            }
+                        }
+                    }
+                }
+                ProofCertificate::Basic { .. }
+                | ProofCertificate::Forcing { .. }
+                | ProofCertificate::Backtracking => {}
+            }
+        }
+    }
+
+    // Ensure target stays as Target
+    roles[target_idx] = HintCellRole::Target;
+    roles
+}
+
+/// Map a hint cell role to the appropriate theme color.
+fn role_color<'a>(role: HintCellRole, theme: &'a Theme) -> Option<&'a Color> {
+    match role {
+        HintCellRole::None => None,
+        HintCellRole::Target => Some(&theme.hint_target_bg),
+        HintCellRole::Involved => Some(&theme.hint_involved_bg),
+        HintCellRole::ChainOn => Some(&theme.hint_chain_on),
+        HintCellRole::ChainOff => Some(&theme.hint_chain_off),
+        HintCellRole::FishBase => Some(&theme.hint_fish_base),
+        HintCellRole::FishCover => Some(&theme.hint_fish_cover),
+        HintCellRole::FishFin => Some(&theme.hint_fish_fin),
+        HintCellRole::UrFloor => Some(&theme.hint_ur_floor),
+        HintCellRole::UrRoof => Some(&theme.hint_ur_roof),
+        HintCellRole::AlsGroup => Some(&theme.hint_als_group),
+    }
+}
 
 // Box-drawing characters for terminal feel (reserved for future text-based rendering)
 #[allow(dead_code)]
@@ -64,6 +220,12 @@ pub fn render_game(
                 font_size,
             );
 
+            // Hint panel below grid when hint is active
+            if state.current_hint().is_some() {
+                let panel_y = grid_y + grid_height + 40.0;
+                render_hint_panel(ctx, state, theme, grid_x, panel_y, grid_width, font_size);
+            }
+
             if state.screen() == ScreenState::Paused {
                 render_pause_overlay(ctx, theme, width, height, font_size);
             }
@@ -105,6 +267,11 @@ fn render_grid(
     let cursor = state.cursor();
     let completed = state.completed_numbers();
 
+    // Pre-compute hint cell roles once per render
+    let hint_roles: Option<[HintCellRole; 81]> = state.current_hint().map(|hint| {
+        compute_hint_roles(hint, state.hint_detail())
+    });
+
     // Set font for numbers
     ctx.set_font(&format!(
         "{}px 'JetBrains Mono', 'Fira Code', 'Consolas', monospace",
@@ -122,8 +289,14 @@ fn render_grid(
             let cell_y = y + row as f64 * cell_size;
 
             // Determine cell background
+            // Priority: cursor > hint_target > proof_role > hint_involved > same_value > highlight > cell_bg
+            let idx = row * 9 + col;
+            let hint_role = hint_roles.map(|r| r[idx]).unwrap_or(HintCellRole::None);
+
             let bg_color = if pos == cursor {
                 &theme.cursor_bg
+            } else if let Some(color) = role_color(hint_role, theme) {
+                color
             } else if state.has_same_value(pos) && state.grid().get(cursor).is_some() {
                 &theme.same_value_bg
             } else if state.is_highlighted(pos) {
@@ -870,6 +1043,86 @@ fn render_stats_screen(
     ctx.set_fill_style_str(&theme.candidate_text.as_css());
     ctx.set_text_align("center");
     let _ = ctx.fill_text("Press Escape or S to return", w / 2.0, h - 40.0);
+}
+
+/// Render hint info panel below the grid
+fn render_hint_panel(
+    ctx: &CanvasRenderingContext2d,
+    state: &GameState,
+    theme: &Theme,
+    x: f64,
+    y: f64,
+    width: f64,
+    font_size: f64,
+) {
+    let hint = match state.current_hint() {
+        Some(h) => h,
+        None => return,
+    };
+
+    let panel_height = font_size * 3.0;
+    let padding = 8.0;
+    let line_height = font_size * 0.75;
+    let small_font = font_size * 0.55;
+
+    // Panel background
+    ctx.set_fill_style_str(&theme.hint_panel_bg.as_css());
+    ctx.fill_rect(x, y, width, panel_height);
+
+    // Technique name + SE rating
+    ctx.set_text_align("left");
+    ctx.set_text_baseline("top");
+    ctx.set_font(&format!("bold {}px 'JetBrains Mono', monospace", small_font));
+    ctx.set_fill_style_str(&theme.hint_technique_text.as_css());
+    let header = format!("{} (SE {:.1})", hint.technique, hint.technique.se_rating());
+    let _ = ctx.fill_text(&header, x + padding, y + padding);
+
+    // Explanation text
+    ctx.set_font(&format!("{}px 'JetBrains Mono', monospace", small_font * 0.9));
+    ctx.set_fill_style_str(&theme.hint_explain_text.as_css());
+    let _ = ctx.fill_text(&hint.explanation, x + padding, y + padding + line_height);
+
+    // Proof summary line (only at ProofDetail)
+    if state.hint_detail() == HintDetailLevel::ProofDetail {
+        if let Some(ref proof) = hint.proof {
+            let proof_summary = match proof {
+                ProofCertificate::Basic { kind } => format!("Proof: {}", kind),
+                ProofCertificate::Fish { digit, base_sectors, fins, .. } => {
+                    if fins.is_empty() {
+                        format!("Fish on digit {}, {} base sectors", digit, base_sectors.len())
+                    } else {
+                        format!("Finned fish on digit {}, {} fins", digit, fins.len())
+                    }
+                }
+                ProofCertificate::Aic { chain, link_types, .. } => {
+                    format!("Chain: {} nodes, {} links", chain.len(), link_types.len())
+                }
+                ProofCertificate::Als { als_chain, rcc_values, .. } => {
+                    format!("ALS chain: {} sets, {} RCC values", als_chain.len(), rcc_values.len())
+                }
+                ProofCertificate::Uniqueness { pattern, .. } => {
+                    format!("Uniqueness: {}", pattern)
+                }
+                ProofCertificate::Forcing { branches, .. } => {
+                    format!("Forcing: {} branches converge", branches)
+                }
+                ProofCertificate::Backtracking => "Backtracking".to_string(),
+            };
+            ctx.set_fill_style_str(&theme.hint_explain_text.as_css_alpha(0.7));
+            let _ = ctx.fill_text(&proof_summary, x + padding, y + padding + line_height * 2.0);
+        }
+    }
+
+    // Right-aligned prompt
+    ctx.set_text_align("right");
+    ctx.set_font(&format!("{}px 'JetBrains Mono', monospace", small_font * 0.85));
+    ctx.set_fill_style_str(&theme.hint_technique_text.as_css_alpha(0.6));
+    let prompt = if state.hint_detail() == HintDetailLevel::ProofDetail {
+        "[proof shown]"
+    } else {
+        "[? for details]"
+    };
+    let _ = ctx.fill_text(prompt, x + width - padding, y + padding);
 }
 
 /// Render temporary message

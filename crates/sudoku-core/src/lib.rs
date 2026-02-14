@@ -24,4 +24,7 @@ pub use generator::{Generator, GeneratorConfig, SymmetryType};
 pub use grid::{Grid, MoveError, ValidationResult};
 pub use position::Position;
 pub use puzzle_id::PuzzleId;
-pub use solver::{Difficulty, Hint, HintType, Solver, Technique};
+pub use solver::{
+    AlsProofDescriptor, Difficulty, ForcingSource, Hint, HintType, LinkType, Polarity,
+    ProofCertificate, Solver, Technique,
+};

@@ -297,4 +297,7 @@ pub struct Hint {
     pub explanation: String,
     /// Cells involved in the reasoning
     pub involved_cells: Vec<Position>,
+    /// Structural proof certificate (not serialized — WASM rendering only)
+    #[serde(skip)]
+    pub proof: Option<super::explain::ProofCertificate>,
 }

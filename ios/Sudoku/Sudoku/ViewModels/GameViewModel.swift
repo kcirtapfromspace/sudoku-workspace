@@ -14,6 +14,8 @@ class GameViewModel: ObservableObject {
     @Published private(set) var hintsUsed: Int = 0
     @Published private(set) var isComplete: Bool = false
     @Published private(set) var currentHint: HintModel?
+    @Published private(set) var hintDetailLevel: HintDetailLevel = .none
+    @Published private(set) var hintCellRoles: [HintCellRole] = Array(repeating: .none, count: 81)
     @Published private(set) var canUndo: Bool = false
     @Published private(set) var canRedo: Bool = false
     @Published private(set) var seRating: Float = 0.0
@@ -183,7 +185,7 @@ class GameViewModel: ObservableObject {
 
     func selectCell(row: Int, col: Int) {
         selectedCell = (row, col)
-        currentHint = nil
+        clearHint()
     }
 
     func clearSelection() {
@@ -485,6 +487,14 @@ class GameViewModel: ObservableObject {
     // MARK: - Hints
 
     func getHint() {
+        if currentHint != nil && hintDetailLevel == .summary {
+            // Second tap: upgrade to proof detail
+            hintDetailLevel = .proofDetail
+            updateHintCellRoles()
+            return
+        }
+
+        // First tap: get a new hint
         guard let engineHint = game.getHint() else { return }
 
         currentHint = HintModel(
@@ -494,17 +504,40 @@ class GameViewModel: ObservableObject {
             eliminate: engineHint.eliminate.map { Int($0) },
             explanation: engineHint.explanation,
             technique: engineHint.technique,
-            seRating: engineHint.seRating
+            seRating: engineHint.seRating,
+            involvedCells: engineHint.involvedCells.map { (row: Int($0.row), col: Int($0.col)) }
         )
         selectedCell = (Int(engineHint.row), Int(engineHint.col))
+        hintDetailLevel = .summary
+        updateHintCellRoles()
         syncFromEngine()
     }
 
     func applyHint() {
         guard currentHint != nil else { return }
         _ = game.applyHint()
-        currentHint = nil
+        clearHint()
         syncFromEngine()
+    }
+
+    func clearHint() {
+        currentHint = nil
+        hintDetailLevel = .none
+        hintCellRoles = Array(repeating: .none, count: 81)
+        game.clearHint()
+    }
+
+    func hintCellRole(row: Int, col: Int) -> HintCellRole {
+        hintCellRoles[row * 9 + col]
+    }
+
+    private func updateHintCellRoles() {
+        guard hintDetailLevel != .none else {
+            hintCellRoles = Array(repeating: .none, count: 81)
+            return
+        }
+        let rawRoles = game.getHintCellRoles(detailLevel: UInt8(hintDetailLevel.rawValue))
+        hintCellRoles = rawRoles.map { HintCellRole(rawValue: $0) ?? .none }
     }
 
     // MARK: - Pause/Resume

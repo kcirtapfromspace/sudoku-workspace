@@ -1,5 +1,8 @@
 use std::sync::{Arc, Mutex};
-use sudoku_core::{Difficulty, Generator, Grid, Hint, HintType, Position, PuzzleId, Solver};
+use sudoku_core::{
+    Difficulty, Generator, Grid, Hint, HintType, Polarity, Position, ProofCertificate, PuzzleId,
+    Solver,
+};
 
 uniffi::setup_scaffolding!();
 
@@ -61,6 +64,47 @@ impl From<Difficulty> for GameDifficulty {
     }
 }
 
+/// A cell position used in hint visualization
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct HintCell {
+    pub row: u8,
+    pub col: u8,
+}
+
+/// Role of a cell in hint visualization
+#[derive(Debug, Clone, Copy, uniffi::Enum)]
+pub enum HintCellRole {
+    None,
+    Target,
+    Involved,
+    ChainOn,
+    ChainOff,
+    FishBase,
+    FishCover,
+    FishFin,
+    UrFloor,
+    UrRoof,
+    AlsGroup,
+}
+
+impl HintCellRole {
+    fn to_u8(self) -> u8 {
+        match self {
+            Self::None => 0,
+            Self::Target => 1,
+            Self::Involved => 2,
+            Self::ChainOn => 3,
+            Self::ChainOff => 4,
+            Self::FishBase => 5,
+            Self::FishCover => 6,
+            Self::FishFin => 7,
+            Self::UrFloor => 8,
+            Self::UrRoof => 9,
+            Self::AlsGroup => 10,
+        }
+    }
+}
+
 /// A hint for the player
 #[derive(Debug, Clone, uniffi::Record)]
 pub struct GameHint {
@@ -78,6 +122,8 @@ pub struct GameHint {
     pub technique: String,
     /// Sudoku Explainer (SE) difficulty rating for this technique
     pub se_rating: f32,
+    /// Cells involved in the reasoning (for highlighting)
+    pub involved_cells: Vec<HintCell>,
 }
 
 impl From<Hint> for GameHint {
@@ -92,6 +138,14 @@ impl From<Hint> for GameHint {
         };
 
         let se_rating = hint.technique.se_rating();
+        let involved_cells = hint
+            .involved_cells
+            .iter()
+            .map(|p| HintCell {
+                row: p.row as u8,
+                col: p.col as u8,
+            })
+            .collect();
 
         GameHint {
             row,
@@ -101,6 +155,7 @@ impl From<Hint> for GameHint {
             explanation: hint.explanation,
             technique: hint.technique.to_string(),
             se_rating,
+            involved_cells,
         }
     }
 }
@@ -134,6 +189,7 @@ pub struct SudokuGame {
     hints_used: Mutex<usize>,
     mistakes: Mutex<usize>,
     seed: Mutex<Option<u64>>,
+    last_hint: Mutex<Option<Hint>>,
 }
 
 #[uniffi::export]
@@ -161,6 +217,7 @@ impl SudokuGame {
             hints_used: Mutex::new(0),
             mistakes: Mutex::new(0),
             seed: Mutex::new(Some(puzzle_id.seed)),
+            last_hint: Mutex::new(None),
         })
     }
 
@@ -186,6 +243,7 @@ impl SudokuGame {
             hints_used: Mutex::new(0),
             mistakes: Mutex::new(0),
             seed: Mutex::new(None),
+            last_hint: Mutex::new(None),
         })
     }
 
@@ -329,10 +387,31 @@ impl SudokuGame {
 
         if let Some(hint) = solver.get_hint(&grid) {
             *self.hints_used.lock().unwrap() += 1;
-            Some(hint.into())
+            let game_hint: GameHint = hint.clone().into();
+            *self.last_hint.lock().unwrap() = Some(hint);
+            Some(game_hint)
         } else {
             None
         }
+    }
+
+    /// Get cell roles for hint visualization.
+    /// Returns 81 u8 values (one per cell), encoding HintCellRole.
+    /// detail_level: 0 = Summary (target + involved), 1 = ProofDetail (proof-specific roles).
+    pub fn get_hint_cell_roles(&self, detail_level: u8) -> Vec<u8> {
+        let hint_guard = self.last_hint.lock().unwrap();
+        match hint_guard.as_ref() {
+            Some(hint) => Self::compute_hint_roles(hint, detail_level)
+                .iter()
+                .map(|r| r.to_u8())
+                .collect(),
+            None => vec![0u8; 81],
+        }
+    }
+
+    /// Clear the stored hint (call when user dismisses hint or selects a new cell)
+    pub fn clear_hint(&self) {
+        *self.last_hint.lock().unwrap() = None;
     }
 
     /// Get the current value at a position (0 if empty)
@@ -602,10 +681,16 @@ impl SudokuGame {
 
     /// Apply a hint automatically
     pub fn apply_hint(&self) -> Option<GameHint> {
+        // Use stored hint if available, otherwise get a new one
         let hint = {
-            let grid = self.grid.lock().unwrap();
-            let solver = Solver::new();
-            solver.get_hint(&grid)?
+            let mut last = self.last_hint.lock().unwrap();
+            if let Some(h) = last.take() {
+                h
+            } else {
+                let grid = self.grid.lock().unwrap();
+                let solver = Solver::new();
+                solver.get_hint(&grid)?
+            }
         };
 
         *self.hints_used.lock().unwrap() += 1;
@@ -644,6 +729,129 @@ impl SudokuGame {
 }
 
 impl SudokuGame {
+    /// Return cells belonging to a sector index.
+    /// Convention: 0..8=rows, 9..17=cols, 18..26=boxes.
+    fn sector_cells(sector: usize) -> Vec<usize> {
+        if sector < 9 {
+            let row = sector;
+            (0..9).map(|col| row * 9 + col).collect()
+        } else if sector < 18 {
+            let col = sector - 9;
+            (0..9).map(|row| row * 9 + col).collect()
+        } else {
+            let b = sector - 18;
+            let br = (b / 3) * 3;
+            let bc = (b % 3) * 3;
+            let mut cells = Vec::with_capacity(9);
+            for r in br..br + 3 {
+                for c in bc..bc + 3 {
+                    cells.push(r * 9 + c);
+                }
+            }
+            cells
+        }
+    }
+
+    /// Compute hint cell roles for all 81 cells.
+    /// detail_level: 0 = Summary, 1 = ProofDetail.
+    fn compute_hint_roles(hint: &Hint, detail_level: u8) -> [HintCellRole; 81] {
+        let mut roles = [HintCellRole::None; 81];
+
+        // Always mark the target cell
+        let target_idx = match &hint.hint_type {
+            HintType::SetValue { pos, .. } | HintType::EliminateCandidates { pos, .. } => {
+                pos.row * 9 + pos.col
+            }
+        };
+        roles[target_idx] = HintCellRole::Target;
+
+        // Mark involved cells
+        for pos in &hint.involved_cells {
+            let idx = pos.row * 9 + pos.col;
+            if matches!(roles[idx], HintCellRole::None) {
+                roles[idx] = HintCellRole::Involved;
+            }
+        }
+
+        // At ProofDetail (level 1), override with proof-specific roles
+        if detail_level >= 1 {
+            if let Some(ref proof) = hint.proof {
+                match proof {
+                    ProofCertificate::Fish {
+                        base_sectors,
+                        cover_sectors,
+                        fins,
+                        ..
+                    } => {
+                        for &s in base_sectors {
+                            for idx in Self::sector_cells(s) {
+                                if matches!(roles[idx], HintCellRole::Involved) {
+                                    roles[idx] = HintCellRole::FishBase;
+                                }
+                            }
+                        }
+                        for &s in cover_sectors {
+                            for idx in Self::sector_cells(s) {
+                                if matches!(roles[idx], HintCellRole::Involved) {
+                                    roles[idx] = HintCellRole::FishCover;
+                                }
+                            }
+                        }
+                        for &idx in fins {
+                            if idx < 81 {
+                                roles[idx] = HintCellRole::FishFin;
+                            }
+                        }
+                    }
+                    ProofCertificate::Aic { chain, .. } => {
+                        for &(cell, _digit, polarity) in chain {
+                            if cell < 81 {
+                                roles[cell] = match polarity {
+                                    Polarity::On => HintCellRole::ChainOn,
+                                    Polarity::Off => HintCellRole::ChainOff,
+                                };
+                            }
+                        }
+                    }
+                    ProofCertificate::Uniqueness {
+                        floor_cells,
+                        roof_cells,
+                        ..
+                    } => {
+                        for &idx in floor_cells {
+                            if idx < 81 {
+                                roles[idx] = HintCellRole::UrFloor;
+                            }
+                        }
+                        for &idx in roof_cells {
+                            if idx < 81 {
+                                roles[idx] = HintCellRole::UrRoof;
+                            }
+                        }
+                    }
+                    ProofCertificate::Als { als_chain, .. } => {
+                        for als in als_chain {
+                            for &idx in &als.cells {
+                                if idx < 81
+                                    && !matches!(roles[idx], HintCellRole::Target)
+                                {
+                                    roles[idx] = HintCellRole::AlsGroup;
+                                }
+                            }
+                        }
+                    }
+                    ProofCertificate::Basic { .. }
+                    | ProofCertificate::Forcing { .. }
+                    | ProofCertificate::Backtracking => {}
+                }
+            }
+        }
+
+        // Ensure target stays as Target
+        roles[target_idx] = HintCellRole::Target;
+        roles
+    }
+
     #[allow(clippy::needless_range_loop)]
     fn check_conflict(values: &[[Option<u8>; 9]; 9], pos: Position, value: u8) -> bool {
         // Check row
@@ -695,6 +903,7 @@ pub fn game_from_string(puzzle: String) -> Option<Arc<SudokuGame>> {
         hints_used: Mutex::new(0),
         mistakes: Mutex::new(0),
         seed: Mutex::new(None),
+        last_hint: Mutex::new(None),
     }))
 }
 
@@ -717,6 +926,7 @@ pub fn game_from_short_code(code: String) -> Option<Arc<SudokuGame>> {
         hints_used: Mutex::new(0),
         mistakes: Mutex::new(0),
         seed: Mutex::new(Some(puzzle_id.seed)),
+        last_hint: Mutex::new(None),
     }))
 }
 
@@ -770,5 +980,6 @@ pub fn game_deserialize(json: String) -> Option<Arc<SudokuGame>> {
         hints_used: Mutex::new(hints_used),
         mistakes: Mutex::new(mistakes),
         seed: Mutex::new(None),
+        last_hint: Mutex::new(None),
     }))
 }

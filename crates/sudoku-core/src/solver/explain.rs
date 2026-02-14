@@ -210,6 +210,7 @@ impl Finding {
             hint_type,
             explanation,
             involved_cells,
+            proof: self.proof.clone(),
         }
     }
 

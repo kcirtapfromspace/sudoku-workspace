@@ -28,9 +28,18 @@ struct GameView: View {
                     .padding()
                 } else {
                     // Portrait layout
+                    let gridSize = min(geometry.size.width - 32, geometry.size.height * 0.55)
                     VStack(spacing: 16) {
                         headerSection
-                        gridSection(size: min(geometry.size.width - 32, geometry.size.height * 0.55))
+                        gridSection(size: gridSize)
+                        if let hint = game.currentHint {
+                            HintPanelView(
+                                hint: hint,
+                                detailLevel: game.hintDetailLevel,
+                                onUpgrade: { game.getHint() },
+                                onDismiss: { game.clearHint() }
+                            )
+                        }
                         Spacer(minLength: 8)
                         numberPadSection
                         controlsSection(compact: false)
@@ -422,7 +431,7 @@ struct GameView: View {
                 game.getHint()
                 hapticFeedback(.medium)
             } label: {
-                Image(systemName: "lightbulb")
+                Image(systemName: game.currentHint != nil ? "lightbulb.fill" : "lightbulb")
             }
 
             // Check Solution button (only when not showing errors immediately)
@@ -464,6 +473,47 @@ struct GameView: View {
     private func hapticFeedback(_ style: UIImpactFeedbackGenerator.FeedbackStyle) {
         guard gameManager.settings.hapticsEnabled else { return }
         UIImpactFeedbackGenerator(style: style).impactOccurred()
+    }
+}
+
+// MARK: - Hint Panel
+
+struct HintPanelView: View {
+    let hint: HintModel
+    let detailLevel: HintDetailLevel
+    let onUpgrade: () -> Void
+    let onDismiss: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text(hint.technique)
+                    .font(.headline)
+                    .foregroundStyle(.green)
+                Text(String(format: "SE %.1f", hint.seRating))
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                Spacer()
+                if detailLevel == .summary {
+                    Button("Details") { onUpgrade() }
+                        .font(.caption)
+                } else {
+                    Text("Proof shown")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Button { onDismiss() } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(.secondary)
+                }
+            }
+            Text(hint.explanation)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(3)
+        }
+        .padding(12)
+        .background(RoundedRectangle(cornerRadius: 8).fill(.ultraThinMaterial))
     }
 }
 

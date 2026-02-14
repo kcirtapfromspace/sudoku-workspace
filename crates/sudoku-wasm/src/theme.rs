@@ -59,6 +59,33 @@ pub struct Theme {
     pub win_color: Color,
     /// Lose screen color
     pub lose_color: Color,
+    // Hint visualization colors
+    /// Generic involved cell background
+    pub hint_involved_bg: Color,
+    /// Target cell (placement/elimination) background
+    pub hint_target_bg: Color,
+    /// AIC ON-polarity cell
+    pub hint_chain_on: Color,
+    /// AIC OFF-polarity cell
+    pub hint_chain_off: Color,
+    /// Fish base sector cell
+    pub hint_fish_base: Color,
+    /// Fish cover sector cell
+    pub hint_fish_cover: Color,
+    /// Fish fin cells
+    pub hint_fish_fin: Color,
+    /// UR floor (bivalue cells)
+    pub hint_ur_floor: Color,
+    /// UR roof (extra candidate cells)
+    pub hint_ur_roof: Color,
+    /// ALS group cell
+    pub hint_als_group: Color,
+    /// Hint panel background
+    pub hint_panel_bg: Color,
+    /// Technique name text color
+    pub hint_technique_text: Color,
+    /// Explanation body text color
+    pub hint_explain_text: Color,
 }
 
 impl Theme {
@@ -81,6 +108,19 @@ impl Theme {
             message_text: Color::new(255, 220, 100),
             win_color: Color::new(100, 255, 150),
             lose_color: Color::new(255, 100, 100),
+            hint_involved_bg: Color::new(60, 70, 50),
+            hint_target_bg: Color::new(100, 60, 30),
+            hint_chain_on: Color::new(50, 120, 80),
+            hint_chain_off: Color::new(130, 50, 50),
+            hint_fish_base: Color::new(40, 80, 120),
+            hint_fish_cover: Color::new(120, 80, 40),
+            hint_fish_fin: Color::new(120, 100, 40),
+            hint_ur_floor: Color::new(50, 80, 120),
+            hint_ur_roof: Color::new(120, 50, 90),
+            hint_als_group: Color::new(80, 60, 120),
+            hint_panel_bg: Color::new(20, 30, 20),
+            hint_technique_text: Color::new(100, 220, 140),
+            hint_explain_text: Color::new(200, 200, 200),
         }
     }
 
@@ -103,6 +143,19 @@ impl Theme {
             message_text: Color::new(180, 120, 0),
             win_color: Color::new(50, 180, 80),
             lose_color: Color::new(220, 50, 50),
+            hint_involved_bg: Color::new(220, 230, 200),
+            hint_target_bg: Color::new(255, 220, 180),
+            hint_chain_on: Color::new(200, 240, 210),
+            hint_chain_off: Color::new(255, 210, 210),
+            hint_fish_base: Color::new(200, 220, 245),
+            hint_fish_cover: Color::new(255, 230, 200),
+            hint_fish_fin: Color::new(255, 240, 200),
+            hint_ur_floor: Color::new(200, 220, 250),
+            hint_ur_roof: Color::new(245, 210, 230),
+            hint_als_group: Color::new(225, 215, 245),
+            hint_panel_bg: Color::new(235, 245, 235),
+            hint_technique_text: Color::new(20, 120, 60),
+            hint_explain_text: Color::new(40, 40, 50),
         }
     }
 
@@ -125,6 +178,19 @@ impl Theme {
             message_text: Color::new(255, 255, 0),
             win_color: Color::new(0, 255, 0),
             lose_color: Color::new(255, 0, 0),
+            hint_involved_bg: Color::new(60, 80, 40),
+            hint_target_bg: Color::new(140, 80, 0),
+            hint_chain_on: Color::new(0, 160, 80),
+            hint_chain_off: Color::new(180, 0, 0),
+            hint_fish_base: Color::new(0, 80, 200),
+            hint_fish_cover: Color::new(200, 120, 0),
+            hint_fish_fin: Color::new(200, 160, 0),
+            hint_ur_floor: Color::new(0, 100, 200),
+            hint_ur_roof: Color::new(200, 0, 120),
+            hint_als_group: Color::new(120, 60, 200),
+            hint_panel_bg: Color::new(0, 20, 0),
+            hint_technique_text: Color::new(0, 255, 100),
+            hint_explain_text: Color::new(255, 255, 255),
         }
     }
 }
