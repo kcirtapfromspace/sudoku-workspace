@@ -857,21 +857,8 @@ fn render_menu(
     ctx.set_fill_style_str(&theme.background.as_css_alpha(0.9));
     ctx.fill_rect(0.0, 0.0, width as f64, height as f64);
 
-    // Title
-    ctx.set_font(&format!(
-        "bold {}px 'JetBrains Mono', monospace",
-        font_size * 1.5
-    ));
-    ctx.set_fill_style_str(&theme.given_text.as_css());
     ctx.set_text_align("center");
     ctx.set_text_baseline("middle");
-    let _ = ctx.fill_text("NEW GAME", width as f64 / 2.0, height as f64 / 2.0 - 120.0);
-
-    ctx.set_font(&format!(
-        "{}px 'JetBrains Mono', monospace",
-        font_size * 0.9
-    ));
-    ctx.set_fill_style_str(&theme.info_text.as_css());
 
     let mut difficulties: Vec<(&str, &str)> = vec![
         ("1", "Beginner"),
@@ -887,10 +874,31 @@ fn render_menu(
         difficulties.push(("8", "Extreme"));
     }
 
-    let mut cy = height as f64 / 2.0 - 60.0;
+    let line_h = font_size * 1.3;
+    let list_height = difficulties.len() as f64 * line_h;
+    let footer_gap = font_size * 1.5;
+    // Total block: title + gap + list + gap + footer, centered vertically
+    let title_space = font_size * 2.5;
+    let total = title_space + list_height + footer_gap;
+    let top = (height as f64 - total) / 2.0;
+
+    ctx.set_font(&format!(
+        "bold {}px 'JetBrains Mono', monospace",
+        font_size * 1.5
+    ));
+    ctx.set_fill_style_str(&theme.given_text.as_css());
+    let _ = ctx.fill_text("NEW GAME", width as f64 / 2.0, top);
+
+    ctx.set_font(&format!(
+        "{}px 'JetBrains Mono', monospace",
+        font_size * 0.9
+    ));
+    ctx.set_fill_style_str(&theme.info_text.as_css());
+
+    let mut cy = top + title_space;
     for (key, name) in &difficulties {
         let _ = ctx.fill_text(&format!("[{}] {}", key, name), width as f64 / 2.0, cy);
-        cy += font_size * 1.3;
+        cy += line_h;
     }
 
     ctx.set_font(&format!(
@@ -901,7 +909,7 @@ fn render_menu(
     let _ = ctx.fill_text(
         "[S] Statistics    [Esc] Cancel",
         width as f64 / 2.0,
-        cy + 30.0,
+        cy + footer_gap * 0.5,
     );
 }
 
