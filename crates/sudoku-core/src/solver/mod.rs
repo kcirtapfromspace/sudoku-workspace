@@ -79,6 +79,46 @@ impl Solver {
         None
     }
 
+    /// Get the next placement hint by chaining through elimination techniques.
+    ///
+    /// Unlike `get_hint` which returns the first technique found (which may be
+    /// an elimination), this method applies eliminations internally and keeps
+    /// searching until it finds a placement (SetValue) hint. This prevents
+    /// callers from looping on the same elimination when they recalculate
+    /// candidates from scratch between calls.
+    pub fn get_next_placement(&self, grid: &Grid) -> Option<Hint> {
+        let mut working = grid.deep_clone();
+        working.recalculate_candidates();
+
+        for _ in 0..500 {
+            if working.is_complete() {
+                return None;
+            }
+
+            if let Some(finding) = self.find_first_technique(&working) {
+                match &finding.inference {
+                    InferenceResult::Placement { .. } => {
+                        return Some(finding.to_hint());
+                    }
+                    InferenceResult::Elimination { .. } => {
+                        apply_finding(&mut working, &finding);
+                        // Continue searching — don't recalculate candidates
+                        // since elimination findings don't change placed values
+                    }
+                }
+            } else {
+                // No logical technique found — fall back to backtracking
+                if let Some(finding) = backtrack::find_backtracking_hint(&working) {
+                    return Some(finding.to_hint());
+                }
+                return None;
+            }
+        }
+
+        // Safety limit reached — fall back to backtracking
+        backtrack::find_backtracking_hint(&working).map(|f| f.to_hint())
+    }
+
     /// Rate the difficulty of a puzzle.
     pub fn rate_difficulty(&self, grid: &Grid) -> Difficulty {
         let empty_count = grid.empty_positions().len();

@@ -703,6 +703,7 @@ impl GameState {
         // Set the value
         self.grid.set_cell_unchecked(self.cursor, Some(value));
         self.grid.recalculate_candidates();
+
     }
 
     fn clear_cell(&mut self) {
@@ -717,6 +718,7 @@ impl GameState {
 
         self.grid.set_cell_unchecked(self.cursor, None);
         self.grid.recalculate_candidates();
+
     }
 
     fn toggle_candidate(&mut self, value: u8) {
@@ -725,6 +727,7 @@ impl GameState {
             return;
         }
         self.grid.cell_mut(self.cursor).toggle_candidate(value);
+
     }
 
     fn clear_candidates(&mut self) {
@@ -735,6 +738,7 @@ impl GameState {
         self.grid
             .cell_mut(self.cursor)
             .set_candidates(BitSet::empty());
+
         self.show_message("Cleared notes");
     }
 
@@ -745,16 +749,19 @@ impl GameState {
         }
         let valid = self.grid.get_candidates(self.cursor);
         self.grid.cell_mut(self.cursor).set_candidates(valid);
+
         self.show_message("Filled valid notes");
     }
 
     fn fill_all_candidates(&mut self) {
         self.grid.recalculate_candidates();
+
         self.show_message("Filled all notes");
     }
 
     fn clear_all_candidates(&mut self) {
         self.grid.clear_all_candidates();
+
         self.show_message("Cleared all notes");
     }
 
@@ -764,6 +771,7 @@ impl GameState {
             self.redo_stack.push((pos, current_value));
             self.grid.set_cell_unchecked(pos, old_value);
             self.grid.recalculate_candidates();
+    
             true
         } else {
             false
@@ -776,6 +784,7 @@ impl GameState {
             self.undo_stack.push((pos, current_value));
             self.grid.set_cell_unchecked(pos, value);
             self.grid.recalculate_candidates();
+    
             true
         } else {
             false
@@ -788,7 +797,8 @@ impl GameState {
     }
 
     fn apply_hint(&mut self) -> Option<Position> {
-        let hint = self.get_hint()?;
+        let solver = Solver::new();
+        let hint = solver.get_next_placement(&self.grid)?;
         self.hints_used += 1;
 
         match hint.hint_type {
@@ -797,14 +807,10 @@ impl GameState {
                 self.set_value(value);
                 Some(pos)
             }
-            HintType::EliminateCandidates { pos, values } => {
-                self.cursor = pos;
-                for value in values {
-                    if self.grid.cell(pos).has_candidate(value) {
-                        self.grid.cell_mut(pos).remove_candidate(value);
-                    }
-                }
-                Some(pos)
+            HintType::EliminateCandidates { .. } => {
+                // get_next_placement should always return SetValue, but
+                // handle this defensively just in case
+                None
             }
         }
     }
