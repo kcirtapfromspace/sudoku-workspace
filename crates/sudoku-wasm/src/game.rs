@@ -518,9 +518,9 @@ impl GameState {
         }
 
         match key {
-            "q" | "Escape" => return false,
-            "s" => self.screen = ScreenState::Stats,
-            "n" | "Enter" | " " => {
+            "q" | "Q" | "Escape" => return false,
+            "s" | "S" => self.screen = ScreenState::Stats,
+            "n" | "N" | "Enter" | " " => {
                 *self = GameState::new_preserving(
                     self.difficulty,
                     self.player_stats.clone(),
@@ -1198,7 +1198,11 @@ impl GameState {
             cursor_row: self.cursor.row,
             cursor_col: self.cursor.col,
             mode: self.mode,
-            screen: self.screen,
+            // Don't persist terminal states — on reload, go to menu instead
+            screen: match self.screen {
+                ScreenState::Win | ScreenState::Lose => ScreenState::Menu,
+                other => other,
+            },
             elapsed_secs: self.elapsed_secs(),
             mistakes: self.mistakes,
             hints_used: self.hints_used,
