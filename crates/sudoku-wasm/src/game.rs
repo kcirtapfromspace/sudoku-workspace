@@ -967,8 +967,13 @@ impl GameState {
 
         match hint.hint_type {
             HintType::SetValue { pos, value } => {
+                // Use the original puzzle solution to determine the correct value.
+                // get_next_placement() solves the *current* grid (which may contain
+                // player mistakes), so its placement can disagree with the original
+                // solution. Always trust self.solution to avoid false "mistake" counts.
+                let correct_value = self.solution.get(pos).unwrap_or(value);
                 self.cursor = pos;
-                self.set_value(value);
+                self.set_value(correct_value);
                 Some(pos)
             }
             HintType::EliminateCandidates { .. } => {
