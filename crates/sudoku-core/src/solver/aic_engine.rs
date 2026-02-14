@@ -166,6 +166,12 @@ pub fn find_w_wing(fab: &CandidateFabric) -> Option<Finding> {
                     let l1 = link_cells[0];
                     let l2 = link_cells[1];
 
+                    // Bivalue cells must not be part of the conjugate pair itself;
+                    // if c1 == l1 the proof breaks (c1=b and l1≠b are contradictory).
+                    if c1 == l1 || c1 == l2 || c2 == l1 || c2 == l2 {
+                        continue;
+                    }
+
                     // c1 must see one link cell, c2 must see the other (or vice versa)
                     let ok = (fab.sees(c1, l1) && fab.sees(c2, l2))
                         || (fab.sees(c1, l2) && fab.sees(c2, l1));

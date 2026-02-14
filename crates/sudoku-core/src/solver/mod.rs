@@ -88,6 +88,10 @@ impl Solver {
         let mut working = grid.deep_clone();
         working.recalculate_candidates();
 
+        // Solve once via backtracking to verify chained results.
+        // This prevents subtle technique bugs from producing wrong hints.
+        let solution = self.solve(grid)?;
+
         for _ in 0..500 {
             if working.is_complete() {
                 return None;
@@ -95,25 +99,30 @@ impl Solver {
 
             if let Some(finding) = self.find_first_technique(&working) {
                 match &finding.inference {
-                    InferenceResult::Placement { .. } => {
-                        return Some(finding.to_hint());
+                    InferenceResult::Placement { cell, value } => {
+                        let pos = idx_to_pos(*cell);
+                        if solution.get(pos) == Some(*value) {
+                            return Some(finding.to_hint());
+                        }
+                        // Unsound placement — chaining corrupted state
+                        break;
                     }
-                    InferenceResult::Elimination { .. } => {
+                    InferenceResult::Elimination { cell, values } => {
+                        let pos = idx_to_pos(*cell);
+                        let sol_val = solution.get(pos);
+                        if values.iter().any(|&v| sol_val == Some(v)) {
+                            // Unsound elimination — stop chaining
+                            break;
+                        }
                         apply_finding(&mut working, &finding);
-                        // Continue searching — don't recalculate candidates
-                        // since elimination findings don't change placed values
                     }
                 }
             } else {
-                // No logical technique found — fall back to backtracking
-                if let Some(finding) = backtrack::find_backtracking_hint(&working) {
-                    return Some(finding.to_hint());
-                }
-                return None;
+                break;
             }
         }
 
-        // Safety limit reached — fall back to backtracking
+        // Fall back to backtracking hint (always correct)
         backtrack::find_backtracking_hint(&working).map(|f| f.to_hint())
     }
 
@@ -658,6 +667,154 @@ mod tests {
                 }
                 steps += 1;
             }
+        }
+    }
+
+    /// Soundness test for generated puzzles at every difficulty tier.
+    /// Uses deterministic seeds so failures are reproducible.
+    #[test]
+    fn test_hint_soundness_all_tiers() {
+        use crate::Generator;
+
+        let solver = Solver::new();
+
+        for (seed, difficulty) in [
+            (42, Difficulty::Easy),
+            (42, Difficulty::Medium),
+            (42, Difficulty::Intermediate),
+            (42, Difficulty::Hard),
+            (42, Difficulty::Expert),
+            (42, Difficulty::Master),
+            (42, Difficulty::Extreme),
+            (99, Difficulty::Expert),
+            (99, Difficulty::Master),
+            (99, Difficulty::Extreme),
+            (123, Difficulty::Extreme),
+            (200, Difficulty::Extreme),
+            (314, Difficulty::Extreme),
+            (500, Difficulty::Extreme),
+            (777, Difficulty::Extreme),
+            (1000, Difficulty::Extreme),
+            (1234, Difficulty::Extreme),
+            (2024, Difficulty::Extreme),
+            (9999, Difficulty::Extreme),
+        ] {
+            let mut gen = Generator::with_seed(seed);
+            let grid = gen.generate(difficulty);
+
+            let solution = match solver.solve(&grid) {
+                Some(s) if s.is_complete() => s,
+                _ => continue,
+            };
+
+            let mut working = grid.deep_clone();
+            working.recalculate_candidates();
+
+            let mut steps = 0;
+            while !working.is_complete() && steps < 500 {
+                let hint = match solver.get_hint(&working) {
+                    Some(h) => h,
+                    None => break,
+                };
+
+                match &hint.hint_type {
+                    HintType::SetValue { pos, value } => {
+                        let sol_val = solution.get(*pos);
+                        assert_eq!(
+                            sol_val,
+                            Some(*value),
+                            "Unsound placement by {:?} (SE {:.1}): ({},{}) = {}, solution has {:?}. Seed={} Diff={:?} Step={}",
+                            hint.technique, hint.technique.se_rating(),
+                            pos.row + 1, pos.col + 1, value, sol_val,
+                            seed, difficulty, steps
+                        );
+                        working.set_cell_unchecked(*pos, Some(*value));
+                        working.recalculate_candidates();
+                    }
+                    HintType::EliminateCandidates { pos, values } => {
+                        let sol_val = solution.get(*pos).expect("Position should have solution");
+                        for &v in values {
+                            assert_ne!(
+                                v, sol_val,
+                                "Unsound elimination by {:?} (SE {:.1}): removing {} from ({},{}) but solution needs it. Seed={} Diff={:?} Step={}",
+                                hint.technique, hint.technique.se_rating(),
+                                v, pos.row + 1, pos.col + 1,
+                                seed, difficulty, steps
+                            );
+                        }
+                        for &v in values {
+                            working.cell_mut(*pos).remove_candidate(v);
+                        }
+                    }
+                }
+                steps += 1;
+            }
+        }
+    }
+
+    /// Soundness test for get_next_placement() which chains eliminations.
+    /// This is what the WASM apply_hint() uses.
+    #[test]
+    fn test_next_placement_soundness() {
+        use crate::Generator;
+
+        let solver = Solver::new();
+
+        for (seed, difficulty) in [
+            (42, Difficulty::Expert),
+            (42, Difficulty::Master),
+            (42, Difficulty::Extreme),
+            (99, Difficulty::Extreme),
+            (123, Difficulty::Extreme),
+            (200, Difficulty::Extreme),
+            (314, Difficulty::Extreme),
+            (500, Difficulty::Extreme),
+        ] {
+            let mut gen = Generator::with_seed(seed);
+            let grid = gen.generate(difficulty);
+
+            let solution = match solver.solve(&grid) {
+                Some(s) if s.is_complete() => s,
+                _ => continue,
+            };
+
+            let mut working = grid.deep_clone();
+            working.recalculate_candidates();
+
+            let mut steps = 0;
+            while !working.is_complete() && steps < 200 {
+                let hint = match solver.get_next_placement(&working) {
+                    Some(h) => h,
+                    None => break,
+                };
+
+                match &hint.hint_type {
+                    HintType::SetValue { pos, value } => {
+                        let sol_val = solution.get(*pos);
+                        assert_eq!(
+                            sol_val,
+                            Some(*value),
+                            "Unsound placement from get_next_placement by {:?}: ({},{}) = {}, solution has {:?}. Seed={} Diff={:?} Step={}",
+                            hint.technique, pos.row + 1, pos.col + 1, value, sol_val,
+                            seed, difficulty, steps
+                        );
+                        working.set_cell_unchecked(*pos, Some(*value));
+                        working.recalculate_candidates();
+                    }
+                    HintType::EliminateCandidates { .. } => {
+                        panic!("get_next_placement returned elimination instead of placement at seed={} diff={:?} step={}", seed, difficulty, steps);
+                    }
+                }
+                steps += 1;
+            }
+
+            assert!(
+                working.is_complete(),
+                "Failed to complete puzzle: seed={} diff={:?} stopped at step={}",
+                seed,
+                difficulty,
+                steps
+            );
         }
     }
 

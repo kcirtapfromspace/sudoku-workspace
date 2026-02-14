@@ -229,18 +229,20 @@ pub fn find_avoidable_rectangle(fab: &CandidateFabric) -> Option<Finding> {
                         continue;
                     }
 
-                    let mut given_count = 0;
+                    // ALL 4 corners must be non-given.  Given cells are fixed
+                    // by the puzzle, so swapping digits in the rectangle would
+                    // violate the given constraints — the pattern is never
+                    // deadly when any corner is a given.
+                    if corners.iter().any(|&c| fab.is_given[c]) {
+                        continue;
+                    }
+
                     let mut solved_count = 0;
                     let mut empty_corners = Vec::new();
                     let mut digits = std::collections::HashSet::new();
 
                     for &corner in &corners {
-                        if fab.is_given[corner] {
-                            given_count += 1;
-                            if let Some(v) = fab.values[corner] {
-                                digits.insert(v);
-                            }
-                        } else if fab.values[corner].is_some() {
+                        if fab.values[corner].is_some() {
                             solved_count += 1;
                             if let Some(v) = fab.values[corner] {
                                 digits.insert(v);
@@ -250,18 +252,32 @@ pub fn find_avoidable_rectangle(fab: &CandidateFabric) -> Option<Finding> {
                         }
                     }
 
-                    if digits.len() != 2 || given_count < 2 || empty_corners.len() != 1 {
-                        continue;
-                    }
-                    if given_count + solved_count + empty_corners.len() != 4 {
+                    // Need exactly 2 distinct digits, 3 solved corners, 1 empty
+                    if digits.len() != 2 || solved_count != 3 || empty_corners.len() != 1 {
                         continue;
                     }
 
                     let empty = empty_corners[0];
                     let cands = fab.cell_cands[empty];
-                    let digit_vec: Vec<u8> = digits.into_iter().collect();
 
-                    for &d in &digit_vec {
+                    // For a deadly swap pattern, diagonal partners must have the
+                    // same value.  Identify which digit would complete the rectangle:
+                    //   corners[0]-corners[3] are diagonal partners
+                    //   corners[1]-corners[2] are diagonal partners
+                    // The digit to eliminate from the empty corner is the value of
+                    // its diagonal partner.
+                    let diag_partner = if empty == corners[0] {
+                        corners[3]
+                    } else if empty == corners[1] {
+                        corners[2]
+                    } else if empty == corners[2] {
+                        corners[1]
+                    } else {
+                        corners[0]
+                    };
+                    let deadly_digit = fab.values[diag_partner];
+
+                    if let Some(d) = deadly_digit {
                         if cands.contains(d) {
                             let ar_floor: Vec<usize> =
                                 corners.iter().filter(|&&c| c != empty).copied().collect();
