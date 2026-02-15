@@ -182,8 +182,7 @@ impl SudokuGame {
     #[wasm_bindgen]
     pub fn set_theme(&mut self, theme_name: &str) {
         self.theme = match theme_name {
-            "ukodus" => Theme::ukodus(),
-            "light" => Theme::light(),
+            "light" | "ukodus" => Theme::light(),
             "high_contrast" => Theme::high_contrast(),
             _ => Theme::dark(),
         };

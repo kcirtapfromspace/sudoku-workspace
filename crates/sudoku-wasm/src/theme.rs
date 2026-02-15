@@ -124,43 +124,8 @@ impl Theme {
         }
     }
 
-    /// Light theme
+    /// Light theme — warm paper palette matching the ukodus.now site
     pub fn light() -> Self {
-        Self {
-            background: Color::new(245, 245, 250),
-            grid_lines: Color::new(180, 180, 200),
-            box_border: Color::new(80, 80, 100),
-            cell_bg: Color::new(255, 255, 255),
-            highlight_bg: Color::new(230, 240, 255),
-            cursor_bg: Color::new(180, 210, 255),
-            same_value_bg: Color::new(200, 220, 255),
-            given_text: Color::new(20, 20, 40),
-            player_text: Color::new(30, 100, 200),
-            candidate_text: Color::new(140, 140, 160),
-            error_text: Color::new(220, 50, 50),
-            completed_bg: Color::new(200, 240, 200),
-            info_text: Color::new(60, 60, 80),
-            message_text: Color::new(180, 120, 0),
-            win_color: Color::new(50, 180, 80),
-            lose_color: Color::new(220, 50, 50),
-            hint_involved_bg: Color::new(220, 230, 200),
-            hint_target_bg: Color::new(255, 220, 180),
-            hint_chain_on: Color::new(200, 240, 210),
-            hint_chain_off: Color::new(255, 210, 210),
-            hint_fish_base: Color::new(200, 220, 245),
-            hint_fish_cover: Color::new(255, 230, 200),
-            hint_fish_fin: Color::new(255, 240, 200),
-            hint_ur_floor: Color::new(200, 220, 250),
-            hint_ur_roof: Color::new(245, 210, 230),
-            hint_als_group: Color::new(225, 215, 245),
-            hint_panel_bg: Color::new(235, 245, 235),
-            hint_technique_text: Color::new(20, 120, 60),
-            hint_explain_text: Color::new(40, 40, 50),
-        }
-    }
-
-    /// Ukodus theme — warm paper palette matching the ukodus.now site
-    pub fn ukodus() -> Self {
         Self {
             background: Color::new(246, 241, 231),       // --paper #f6f1e7
             grid_lines: Color::new(190, 182, 168),
