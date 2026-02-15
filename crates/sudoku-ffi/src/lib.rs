@@ -903,6 +903,50 @@ impl SudokuGame {
     }
 }
 
+// MARK: - Puzzle Validation
+
+/// Result of validating an 81-character puzzle string
+#[derive(Debug, Clone, uniffi::Enum)]
+pub enum PuzzleValidation {
+    Valid,
+    NoSolution,
+    MultipleSolutions,
+    InvalidFormat { reason: String },
+}
+
+/// Validate whether a puzzle string represents a valid, uniquely-solvable Sudoku.
+#[uniffi::export]
+pub fn validate_puzzle_string(puzzle: String) -> PuzzleValidation {
+    if puzzle.len() != 81 {
+        return PuzzleValidation::InvalidFormat {
+            reason: format!("Expected 81 characters, got {}", puzzle.len()),
+        };
+    }
+
+    if !puzzle.chars().all(|c| c.is_ascii_digit() || c == '.') {
+        return PuzzleValidation::InvalidFormat {
+            reason: "Puzzle must contain only digits 0-9 or '.'".to_string(),
+        };
+    }
+
+    let grid = match Grid::from_string(&puzzle) {
+        Some(g) => g,
+        None => {
+            return PuzzleValidation::InvalidFormat {
+                reason: "Could not parse puzzle grid".to_string(),
+            }
+        }
+    };
+
+    let solver = Solver::new();
+    let count = solver.count_solutions(&grid, 2);
+    match count {
+        0 => PuzzleValidation::NoSolution,
+        1 => PuzzleValidation::Valid,
+        _ => PuzzleValidation::MultipleSolutions,
+    }
+}
+
 // Free functions for creating games (UniFFI doesn't support associated functions that aren't constructors)
 
 /// Create a game from a puzzle string (81 characters, 0 or . for empty)

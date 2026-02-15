@@ -65,6 +65,15 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.ukodus.app.tests
+        GENERATE_INFOPLIST_FILE: YES
+        LIBRARY_SEARCH_PATHS:
+          - "$(inherited)"
+          - "$(PROJECT_DIR)/../Frameworks"
+        HEADER_SEARCH_PATHS:
+          - "$(inherited)"
+          - "$(PROJECT_DIR)/../Frameworks"
+        SWIFT_INCLUDE_PATHS:
+          - "$(PROJECT_DIR)/../Frameworks"
 
   SudokuUITests:
     type: bundle.ui-testing

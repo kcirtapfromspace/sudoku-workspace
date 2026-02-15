@@ -34,6 +34,40 @@ enum Difficulty: String, CaseIterable, Identifiable, Codable {
         default: return nil
         }
     }
+
+    /// SE rating range matching the Rust engine's Difficulty::se_range()
+    var seRange: ClosedRange<Float> {
+        switch self {
+        case .beginner:     return 1.5...2.0
+        case .easy:         return 2.0...2.5
+        case .medium:       return 2.5...3.4
+        case .intermediate: return 3.4...3.8
+        case .hard:         return 3.8...4.5
+        case .expert:       return 4.5...5.5
+        case .master:       return 5.5...7.0
+        case .extreme:      return 7.0...11.0
+        }
+    }
+
+    /// Midpoint SE rating for quick-play
+    var defaultSE: Float {
+        let r = seRange
+        return (r.lowerBound + r.upperBound) / 2.0
+    }
+
+    /// Short description of techniques at this difficulty
+    var seDescription: String {
+        switch self {
+        case .beginner:     return "Naked singles"
+        case .easy:         return "Hidden singles"
+        case .medium:       return "Pairs & pointing"
+        case .intermediate: return "Triples & box/line"
+        case .hard:         return "Quads & intersections"
+        case .expert:       return "Fish & uniqueness"
+        case .master:       return "Wings & chains"
+        case .extreme:      return "ALS, forcing chains & beyond"
+        }
+    }
 }
 
 // MARK: - Cell Model

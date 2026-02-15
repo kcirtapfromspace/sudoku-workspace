@@ -21,7 +21,7 @@
     <key>CFBundleShortVersionString</key>
     <string>$(MARKETING_VERSION)</string>
     <key>CFBundleVersion</key>
-    <string>202602131056</string>
+    <string>202602131942</string>
     <key>LSRequiresIPhoneOS</key>
     <true/>
     <key>UIApplicationSceneManifest</key>
@@ -70,6 +70,8 @@
         <string>$(PRODUCT_BUNDLE_IDENTIFIER).refresh</string>
     </array>
     <key>NSCameraUsageDescription</key>
-    <string>Camera access is needed to scan QR codes for shared Sudoku puzzles.</string>
+    <string>Take a photo of a Sudoku puzzle to import and play it, or scan QR codes for shared puzzles.</string>
+    <key>NSPhotoLibraryUsageDescription</key>
+    <string>Select a photo of a Sudoku puzzle to import and play it.</string>
 </dict>
 </plist>

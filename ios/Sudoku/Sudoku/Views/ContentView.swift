@@ -70,12 +70,12 @@ struct ContentView: View {
 
 struct MenuView: View {
     @EnvironmentObject var gameManager: GameManager
-    @State private var showingDifficultyPicker = false
-    @State private var showingSERatingPicker = false
+    @State private var showingNewGame = false
     @State private var showingSettings = false
-    @State private var showingStats = false
-    @State private var showingHistory = false
-    @State private var showingScanner = false
+    @State private var showingProgress = false
+    @State private var showingImport = false
+    @State private var capturedImage: UIImage?
+    @State private var showingConfirmation = false
 
     var body: some View {
         NavigationStack {
@@ -109,7 +109,7 @@ struct MenuView: View {
                     }
 
                     Button {
-                        showingDifficultyPicker = true
+                        showingNewGame = true
                     } label: {
                         Label("New Game", systemImage: "plus")
                             .frame(maxWidth: .infinity)
@@ -117,69 +117,36 @@ struct MenuView: View {
                     .buttonStyle(.bordered)
                     .controlSize(.large)
                     .accessibilityIdentifier("New Game")
-
-                    Button {
-                        showingSERatingPicker = true
-                    } label: {
-                        Label("SE Rating", systemImage: "gauge.medium")
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.large)
-                    .accessibilityIdentifier("SE Rating")
                 }
                 .padding(.horizontal, 40)
 
                 Spacer()
 
                 // Bottom buttons
-                HStack(spacing: 24) {
+                HStack(spacing: 40) {
                     Button {
-                        showingStats = true
+                        showingProgress = true
                     } label: {
                         VStack {
                             Image(systemName: "chart.bar.fill")
                                 .font(.title2)
-                            Text("Stats")
+                            Text("Progress")
                                 .font(.caption)
                         }
                     }
-                    .accessibilityIdentifier("Stats")
+                    .accessibilityIdentifier("Progress")
 
                     Button {
-                        showingHistory = true
+                        showingImport = true
                     } label: {
                         VStack {
-                            Image(systemName: "book.fill")
+                            Image(systemName: "camera.fill")
                                 .font(.title2)
-                            Text("Library")
+                            Text("Import")
                                 .font(.caption)
                         }
                     }
-                    .accessibilityIdentifier("Library")
-
-                    Button {
-                        GameCenterManager.shared.showGameCenter()
-                    } label: {
-                        VStack {
-                            Image(systemName: "trophy.fill")
-                                .font(.title2)
-                            Text("Leaderboard")
-                                .font(.caption)
-                        }
-                    }
-
-                    Button {
-                        showingScanner = true
-                    } label: {
-                        VStack {
-                            Image(systemName: "qrcode.viewfinder")
-                                .font(.title2)
-                            Text("Scan")
-                                .font(.caption)
-                        }
-                    }
-                    .accessibilityIdentifier("Scan")
+                    .accessibilityIdentifier("Import")
 
                     Button {
                         showingSettings = true
@@ -196,64 +163,66 @@ struct MenuView: View {
                 .foregroundStyle(.secondary)
                 .padding(.bottom, 40)
             }
-            .sheet(isPresented: $showingDifficultyPicker) {
-                DifficultyPickerView { difficulty in
-                    gameManager.newGame(difficulty: difficulty)
-                    showingDifficultyPicker = false
-                }
-                .presentationDetents([.medium])
-            }
-            .sheet(isPresented: $showingSERatingPicker) {
-                SERatingPickerView { targetSE in
+            .sheet(isPresented: $showingNewGame) {
+                NewGamePickerView { targetSE in
+                    showingNewGame = false
                     gameManager.newGameWithSE(targetSE: targetSE)
-                    showingSERatingPicker = false
                 }
-                .presentationDetents([.large])
             }
             .sheet(isPresented: $showingSettings) {
                 SettingsView()
             }
-            .sheet(isPresented: $showingStats) {
-                StatsView()
+            .sheet(isPresented: $showingProgress) {
+                ProgressHubView()
             }
-            .sheet(isPresented: $showingHistory) {
-                GameHistoryView()
+            .fullScreenCover(isPresented: $showingImport) {
+                UnifiedImportView(
+                    onPuzzleFound: { puzzleString in
+                        showingImport = false
+                        gameManager.loadSharedPuzzle(puzzleString)
+                    },
+                    onImageCaptured: { image in
+                        capturedImage = image
+                        showingImport = false
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                            showingConfirmation = true
+                        }
+                    }
+                )
             }
-            .sheet(isPresented: $showingScanner) {
-                QRScannerView { puzzleString in
-                    showingScanner = false
-                    gameManager.loadSharedPuzzle(puzzleString)
+            .sheet(isPresented: $showingConfirmation) {
+                if let image = capturedImage {
+                    PuzzleConfirmationView(image: image) { puzzleString in
+                        showingConfirmation = false
+                        gameManager.loadSharedPuzzle(puzzleString)
+                    }
                 }
             }
         }
     }
 }
 
-// MARK: - Difficulty Picker
+// MARK: - New Game Picker (unified difficulty + SE slider)
 
-struct DifficultyPickerView: View {
-    let onSelect: (Difficulty) -> Void
+struct NewGamePickerView: View {
+    let onPlay: (Float) -> Void
     @Environment(\.dismiss) var dismiss
     @EnvironmentObject var gameManager: GameManager
+    @State private var expanded: Difficulty?
+    @State private var targetSE: Float = 2.0
 
     var body: some View {
         NavigationStack {
             List {
-                // Show only unlocked difficulties - locked ones are completely hidden
                 ForEach(gameManager.statistics.availableDifficulties) { difficulty in
-                    Button {
-                        onSelect(difficulty)
-                    } label: {
-                        HStack {
-                            Text(difficulty.displayName)
-                                .foregroundStyle(.primary)
-                            Spacer()
-                            difficultyIndicator(difficulty)
-                        }
+                    difficultyRow(difficulty)
+
+                    if expanded == difficulty {
+                        seSlider(for: difficulty)
                     }
                 }
             }
-            .navigationTitle("Select Difficulty")
+            .navigationTitle("New Game")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -263,8 +232,63 @@ struct DifficultyPickerView: View {
         }
     }
 
+    @ViewBuilder
+    private func difficultyRow(_ diff: Difficulty) -> some View {
+        Button {
+            if expanded == diff {
+                // Already expanded — play with current SE
+                onPlay(targetSE)
+            } else {
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    expanded = diff
+                    targetSE = diff.defaultSE
+                }
+            }
+        } label: {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(diff.displayName)
+                        .font(.body.weight(expanded == diff ? .semibold : .regular))
+                        .foregroundStyle(.primary)
+                    Text(diff.seDescription)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                difficultyIndicator(diff)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    @ViewBuilder
+    private func seSlider(for diff: Difficulty) -> some View {
+        let range = diff.seRange
+        VStack(spacing: 10) {
+            HStack {
+                Text(String(format: "%.1f", range.lowerBound))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Slider(value: $targetSE, in: range, step: 0.1)
+                Text(String(format: "%.1f", range.upperBound))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Button {
+                onPlay(targetSE)
+            } label: {
+                Text("Play (SE \(String(format: "%.1f", targetSE)))")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.regular)
+        }
+        .padding(.vertical, 4)
+        .transition(.opacity.combined(with: .move(edge: .top)))
+    }
+
     private func difficultyIndicator(_ diff: Difficulty) -> some View {
-        // Number of dots based on max unlocked difficulty
         let maxDots = gameManager.statistics.availableDifficulties.count
         let filled: Int = {
             switch diff {
@@ -288,6 +312,77 @@ struct DifficultyPickerView: View {
         }
     }
 }
+
+// MARK: - Progress Hub (Stats + Library + Leaderboard)
+
+struct ProgressHubView: View {
+    @State private var tab: ProgressTab = .stats
+
+    enum ProgressTab: String, CaseIterable {
+        case stats = "Stats"
+        case library = "Library"
+        case leaderboard = "Leaderboard"
+    }
+
+    var body: some View {
+        TabView(selection: $tab) {
+            StatsView()
+                .tag(ProgressTab.stats)
+                .tabItem {
+                    Label("Stats", systemImage: "chart.bar.fill")
+                }
+
+            GameHistoryView()
+                .tag(ProgressTab.library)
+                .tabItem {
+                    Label("Library", systemImage: "book.fill")
+                }
+
+            LeaderboardTabView()
+                .tag(ProgressTab.leaderboard)
+                .tabItem {
+                    Label("Leaderboard", systemImage: "trophy.fill")
+                }
+        }
+    }
+}
+
+/// Leaderboard tab — launches Game Center
+struct LeaderboardTabView: View {
+    @Environment(\.dismiss) var dismiss
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 24) {
+                Spacer()
+                Image(systemName: "trophy.fill")
+                    .font(.system(size: 48))
+                    .foregroundStyle(.secondary)
+                Text("View your rankings and compete\nwith players worldwide.")
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(.secondary)
+                Button {
+                    GameCenterManager.shared.showGameCenter()
+                } label: {
+                    Label("Open Game Center", systemImage: "trophy")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .padding(.horizontal, 40)
+                Spacer()
+            }
+            .navigationTitle("Leaderboard")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
+    }
+}
+
 
 // MARK: - Loading View
 
