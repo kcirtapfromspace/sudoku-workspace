@@ -279,6 +279,12 @@ impl SudokuGame {
         self.state.hints_used()
     }
 
+    /// Get the move log as JSON for anti-cheat replay
+    #[wasm_bindgen]
+    pub fn get_move_log(&self) -> String {
+        self.state.move_log_json()
+    }
+
     /// Toggle pause
     #[wasm_bindgen]
     pub fn toggle_pause(&mut self) {

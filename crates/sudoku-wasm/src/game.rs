@@ -21,6 +21,34 @@ pub enum HintDetailLevel {
     ProofDetail,
 }
 
+/// A single move recorded for anti-cheat replay
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MoveLogEntry {
+    /// 0-indexed sequence number
+    pub seq: u32,
+    /// Milliseconds since game start (pauses excluded)
+    pub ms: u32,
+    /// Cell index: row*9 + col (0..80)
+    pub cell: u8,
+    /// What the player did
+    pub action: MoveAction,
+}
+
+/// The action taken on a cell
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum MoveAction {
+    /// Player placed digit 1-9
+    Place(u8),
+    /// Player erased cell (stores old value)
+    Clear(u8),
+    /// Hint system placed digit
+    Hint(u8),
+    /// Undo restored cell to this value (None = cleared)
+    Undo(Option<u8>),
+    /// Redo restored cell to this value (None = cleared)
+    Redo(Option<u8>),
+}
+
 /// Input mode
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum InputMode {
@@ -244,6 +272,10 @@ pub struct GameState {
     secrets_unlocked: bool,
     /// Cached SE (Sudoku Explainer) rating
     se_rating: f32,
+    /// Move log for anti-cheat replay (not serialized into save state)
+    move_log: Vec<MoveLogEntry>,
+    /// Next sequence number for move log
+    move_seq: u32,
 }
 
 /// Konami code sequence: Up Up Down Down Left Right Left Right B A
@@ -303,6 +335,8 @@ impl GameState {
             konami_progress: 0,
             secrets_unlocked: false,
             se_rating,
+            move_log: Vec::new(),
+            move_seq: 0,
         }
     }
 
@@ -361,6 +395,8 @@ impl GameState {
             konami_progress: 0,
             secrets_unlocked: false,
             se_rating,
+            move_log: Vec::new(),
+            move_seq: 0,
         })
     }
 
@@ -407,6 +443,8 @@ impl GameState {
             konami_progress: 0,
             secrets_unlocked: false,
             se_rating,
+            move_log: Vec::new(),
+            move_seq: 0,
         })
     }
 
@@ -434,6 +472,36 @@ impl GameState {
             let elapsed = Self::now() - self.start_time + self.paused_elapsed;
             (elapsed / 1000.0) as u32
         }
+    }
+
+    /// Get elapsed time in milliseconds (for move log timestamps)
+    fn elapsed_ms(&self) -> u32 {
+        let ms = if self.screen == ScreenState::Paused
+            || self.screen == ScreenState::Win
+            || self.screen == ScreenState::Lose
+        {
+            self.paused_elapsed
+        } else {
+            Self::now() - self.start_time + self.paused_elapsed
+        };
+        ms.max(0.0) as u32
+    }
+
+    /// Append a move to the log
+    fn log_move(&mut self, pos: Position, action: MoveAction) {
+        let entry = MoveLogEntry {
+            seq: self.move_seq,
+            ms: self.elapsed_ms(),
+            cell: (pos.row * 9 + pos.col) as u8,
+            action,
+        };
+        self.move_seq += 1;
+        self.move_log.push(entry);
+    }
+
+    /// Get the move log as JSON for submission
+    pub fn move_log_json(&self) -> String {
+        serde_json::to_string(&self.move_log).unwrap_or_else(|_| "[]".to_string())
     }
 
     /// Get formatted elapsed time
@@ -870,6 +938,9 @@ impl GameState {
         // Set the value
         self.grid.set_cell_unchecked(self.cursor, Some(value));
         self.grid.recalculate_candidates();
+
+        // Log the move
+        self.log_move(self.cursor, MoveAction::Place(value));
     }
 
     fn clear_cell(&mut self) {
@@ -884,6 +955,11 @@ impl GameState {
 
         self.grid.set_cell_unchecked(self.cursor, None);
         self.grid.recalculate_candidates();
+
+        // Log the clear (old_value is always Some here due to guard above)
+        if let Some(v) = old_value {
+            self.log_move(self.cursor, MoveAction::Clear(v));
+        }
     }
 
     fn toggle_candidate(&mut self, value: u8) {
@@ -936,6 +1012,7 @@ impl GameState {
             self.grid.set_cell_unchecked(pos, old_value);
             self.grid.recalculate_candidates();
 
+            self.log_move(pos, MoveAction::Undo(old_value));
             true
         } else {
             false
@@ -949,6 +1026,7 @@ impl GameState {
             self.grid.set_cell_unchecked(pos, value);
             self.grid.recalculate_candidates();
 
+            self.log_move(pos, MoveAction::Redo(value));
             true
         } else {
             false
@@ -974,6 +1052,14 @@ impl GameState {
                 let correct_value = self.solution.get(pos).unwrap_or(value);
                 self.cursor = pos;
                 self.set_value(correct_value);
+
+                // Reclassify the Place entry that set_value just logged as Hint
+                if let Some(last) = self.move_log.last_mut() {
+                    if let MoveAction::Place(v) = last.action {
+                        last.action = MoveAction::Hint(v);
+                    }
+                }
+
                 Some(pos)
             }
             HintType::EliminateCandidates { .. } => {
@@ -1263,6 +1349,8 @@ impl GameState {
             konami_progress: 0,
             secrets_unlocked: false,
             se_rating: 0.0,
+            move_log: Vec::new(),
+            move_seq: 0,
         }
     }
 }
