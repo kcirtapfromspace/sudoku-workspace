@@ -1,7 +1,7 @@
 use std::sync::{Arc, Mutex};
 use sudoku_core::{
-    Difficulty, Generator, Grid, Hint, HintType, Polarity, Position, ProofCertificate, PuzzleId,
-    Solver,
+    BitSet, Difficulty, Generator, Grid, Hint, HintType, Polarity, Position, ProofCertificate,
+    PuzzleId, Solver,
 };
 
 uniffi::setup_scaffolding!();
@@ -184,8 +184,8 @@ pub struct SudokuGame {
     solution: Mutex<Grid>,
     difficulty: Mutex<Difficulty>,
     rated_difficulty: Mutex<Difficulty>,
-    undo_stack: Mutex<Vec<(usize, usize, Option<u8>)>>,
-    redo_stack: Mutex<Vec<(usize, usize, Option<u8>)>>,
+    undo_stack: Mutex<Vec<(usize, usize, Option<u8>, BitSet)>>,
+    redo_stack: Mutex<Vec<(usize, usize, Option<u8>, BitSet)>>,
     hints_used: Mutex<usize>,
     mistakes: Mutex<usize>,
     seed: Mutex<Option<u64>>,
@@ -261,12 +261,13 @@ impl SudokuGame {
             return MoveResult::CannotModifyGiven;
         }
 
-        // Save for undo
+        // Save for undo (including current candidates so they can be restored)
         let old_value = grid.get(pos);
+        let old_candidates = grid.cell(pos).candidates();
         self.undo_stack
             .lock()
             .unwrap()
-            .push((row as usize, col as usize, old_value));
+            .push((row as usize, col as usize, old_value, old_candidates));
         self.redo_stack.lock().unwrap().clear();
 
         // Check if correct
@@ -275,9 +276,9 @@ impl SudokuGame {
             *self.mistakes.lock().unwrap() += 1;
         }
 
-        // Make the move
+        // Set the value and remove it from peer candidates
         grid.set_cell_unchecked(pos, Some(value));
-        grid.recalculate_candidates();
+        grid.update_candidates_after_move(pos, value);
 
         // Check for conflicts
         let values = grid.values();
@@ -308,14 +309,14 @@ impl SudokuGame {
             return MoveResult::Success;
         }
 
+        let old_candidates = grid.cell(pos).candidates();
         self.undo_stack
             .lock()
             .unwrap()
-            .push((row as usize, col as usize, old_value));
+            .push((row as usize, col as usize, old_value, old_candidates));
         self.redo_stack.lock().unwrap().clear();
 
         grid.set_cell_unchecked(pos, None);
-        grid.recalculate_candidates();
 
         MoveResult::Success
     }
@@ -341,18 +342,26 @@ impl SudokuGame {
     /// Undo the last move
     pub fn undo(&self) -> bool {
         let mut undo_stack = self.undo_stack.lock().unwrap();
-        if let Some((row, col, old_value)) = undo_stack.pop() {
+        if let Some((row, col, old_value, old_candidates)) = undo_stack.pop() {
             let pos = Position::new(row, col);
             let mut grid = self.grid.lock().unwrap();
             let current_value = grid.get(pos);
+            let current_candidates = grid.cell(pos).candidates();
 
             self.redo_stack
                 .lock()
                 .unwrap()
-                .push((row, col, current_value));
+                .push((row, col, current_value, current_candidates));
 
             grid.set_cell_unchecked(pos, old_value);
-            grid.recalculate_candidates();
+            // Restore the cell's own candidates from before the move
+            if old_value.is_none() {
+                grid.cell_mut(pos).set_candidates(old_candidates);
+            }
+            // If restoring a value, remove it from peer candidates
+            if let Some(v) = old_value {
+                grid.update_candidates_after_move(pos, v);
+            }
             true
         } else {
             false
@@ -362,18 +371,26 @@ impl SudokuGame {
     /// Redo the last undone move
     pub fn redo(&self) -> bool {
         let mut redo_stack = self.redo_stack.lock().unwrap();
-        if let Some((row, col, value)) = redo_stack.pop() {
+        if let Some((row, col, value, saved_candidates)) = redo_stack.pop() {
             let pos = Position::new(row, col);
             let mut grid = self.grid.lock().unwrap();
             let current_value = grid.get(pos);
+            let current_candidates = grid.cell(pos).candidates();
 
             self.undo_stack
                 .lock()
                 .unwrap()
-                .push((row, col, current_value));
+                .push((row, col, current_value, current_candidates));
 
             grid.set_cell_unchecked(pos, value);
-            grid.recalculate_candidates();
+            // Restore the cell's candidates from the redo snapshot
+            if value.is_none() {
+                grid.cell_mut(pos).set_candidates(saved_candidates);
+            }
+            // If placing a value, remove it from peer candidates
+            if let Some(v) = value {
+                grid.update_candidates_after_move(pos, v);
+            }
             true
         } else {
             false
@@ -521,7 +538,7 @@ impl SudokuGame {
     pub fn get_valid_candidates(&self, row: u8, col: u8) -> Vec<u8> {
         let pos = Position::new(row as usize, col as usize);
         let grid = self.grid.lock().unwrap();
-        grid.get_candidates(pos).iter().collect()
+        grid.compute_candidates(pos).iter().collect()
     }
 
     /// Check if a cell is a naked single (only one valid candidate)
@@ -532,7 +549,7 @@ impl SudokuGame {
         if cell.is_given() || cell.is_filled() {
             return false;
         }
-        grid.get_candidates(pos).count() == 1
+        grid.compute_candidates(pos).count() == 1
     }
 
     /// Fill candidates for a single cell with valid values
@@ -543,7 +560,7 @@ impl SudokuGame {
         if cell.is_given() || cell.is_filled() {
             return false;
         }
-        let valid = grid.get_candidates(pos);
+        let valid = grid.compute_candidates(pos);
         grid.cell_mut(pos).set_candidates(valid);
         true
     }
@@ -701,13 +718,14 @@ impl SudokuGame {
                 // solution. Always trust self.solution to avoid false "mistake" counts.
                 let correct_value = solution.get(*pos).unwrap_or(*value);
                 let old_value = grid.get(*pos);
+                let old_candidates = grid.cell(*pos).candidates();
                 self.undo_stack
                     .lock()
                     .unwrap()
-                    .push((pos.row, pos.col, old_value));
+                    .push((pos.row, pos.col, old_value, old_candidates));
                 self.redo_stack.lock().unwrap().clear();
                 grid.set_cell_unchecked(*pos, Some(correct_value));
-                grid.recalculate_candidates();
+                grid.update_candidates_after_move(*pos, correct_value);
             }
             HintType::EliminateCandidates { .. } => {
                 // get_next_placement should always return SetValue, but
