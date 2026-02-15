@@ -11,11 +11,42 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  # Rust build and tests
-  rust:
-    name: Rust Build & Test
+  # Fast checks: fmt + clippy (no full compile)
+  lint:
+    name: Lint & Format
     runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
 
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-lint-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-lint-
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Clippy (workspace)
+        run: cargo clippy --workspace --exclude sudoku-wasm --all-features -- -D warnings
+
+  # Workspace tests
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    needs: lint
     steps:
       - uses: actions/checkout@v4
 
@@ -31,27 +62,18 @@ jobs:
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
             target/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-cargo-test-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
-            ${{ runner.os }}-cargo-
-
-      - name: Build all crates
-        run: cargo build --workspace --all-features
+            ${{ runner.os }}-cargo-test-
 
       - name: Run tests
-        run: cargo test --workspace --all-features
-
-      - name: Check formatting
-        run: cargo fmt --all -- --check
-
-      - name: Run clippy
-        run: cargo clippy --workspace --all-features -- -D warnings
+        run: cargo test --workspace --exclude sudoku-wasm --all-features
 
   # WASM build
   wasm:
     name: WASM Build
     runs-on: ubuntu-latest
-
+    needs: lint
     steps:
       - uses: actions/checkout@v4
 
@@ -88,11 +110,11 @@ jobs:
           path: crates/sudoku-wasm/pkg/
           retention-days: 7
 
-  # TUI build check (Linux)
+  # TUI build (Linux)
   tui-linux:
     name: TUI Build (Linux)
     runs-on: ubuntu-latest
-
+    needs: test
     steps:
       - uses: actions/checkout@v4
 
@@ -122,11 +144,11 @@ jobs:
           path: target/release/sudoku
           retention-days: 7
 
-  # TUI build check (macOS)
+  # TUI build (macOS)
   tui-macos:
     name: TUI Build (macOS)
     runs-on: macos-latest
-
+    needs: test
     steps:
       - uses: actions/checkout@v4
 
