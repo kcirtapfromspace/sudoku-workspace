@@ -8,6 +8,7 @@ export const sudokugame_elapsed_string: (a: number) => [number, number];
 export const sudokugame_games_played: (a: number) => number;
 export const sudokugame_games_won: (a: number) => number;
 export const sudokugame_get_height: (a: number) => number;
+export const sudokugame_get_move_log: (a: number) => [number, number];
 export const sudokugame_get_puzzle_string: (a: number) => [number, number];
 export const sudokugame_get_short_code: (a: number) => [number, number];
 export const sudokugame_get_state_json: (a: number) => [number, number];

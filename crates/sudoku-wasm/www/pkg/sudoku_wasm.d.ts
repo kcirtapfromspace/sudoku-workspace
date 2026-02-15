@@ -32,6 +32,10 @@ export class SudokuGame {
      */
     get_height(): number;
     /**
+     * Get the move log as JSON for anti-cheat replay
+     */
+    get_move_log(): string;
+    /**
      * Get the current puzzle as an 81-character string
      */
     get_puzzle_string(): string;
@@ -134,6 +138,7 @@ export interface InitOutput {
     readonly sudokugame_games_played: (a: number) => number;
     readonly sudokugame_games_won: (a: number) => number;
     readonly sudokugame_get_height: (a: number) => number;
+    readonly sudokugame_get_move_log: (a: number) => [number, number];
     readonly sudokugame_get_puzzle_string: (a: number) => [number, number];
     readonly sudokugame_get_short_code: (a: number) => [number, number];
     readonly sudokugame_get_state_json: (a: number) => [number, number];

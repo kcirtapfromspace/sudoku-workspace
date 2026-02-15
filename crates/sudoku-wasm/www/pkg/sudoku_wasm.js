@@ -79,6 +79,22 @@ export class SudokuGame {
         return ret >>> 0;
     }
     /**
+     * Get the move log as JSON for anti-cheat replay
+     * @returns {string}
+     */
+    get_move_log() {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const ret = wasm.sudokugame_get_move_log(this.__wbg_ptr);
+            deferred1_0 = ret[0];
+            deferred1_1 = ret[1];
+            return getStringFromWasm0(ret[0], ret[1]);
+        } finally {
+            wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
+        }
+    }
+    /**
      * Get the current puzzle as an 81-character string
      * @returns {string}
      */
