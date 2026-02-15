@@ -240,7 +240,7 @@ impl Grid {
     }
 
     /// Update candidates in affected cells after a move
-    fn update_candidates_after_move(&mut self, pos: Position, value: u8) {
+    pub fn update_candidates_after_move(&mut self, pos: Position, value: u8) {
         for constraint in &self.constraints {
             for affected_pos in constraint.affected_cells(pos) {
                 self.cells[affected_pos.row][affected_pos.col].remove_candidate(value);
@@ -261,6 +261,24 @@ impl Grid {
                 }
             }
         }
+    }
+
+    /// Compute valid candidates for a cell based on current grid state
+    /// (does not modify stored candidates)
+    pub fn compute_candidates(&self, pos: Position) -> BitSet {
+        if self.cells[pos.row][pos.col].is_filled() {
+            return BitSet::empty();
+        }
+        let mut candidates = BitSet::all_9();
+        let values = self.values();
+        for constraint in &self.constraints {
+            for affected_pos in constraint.affected_cells(pos) {
+                if let Some(v) = values[affected_pos.row][affected_pos.col] {
+                    candidates.remove(v);
+                }
+            }
+        }
+        candidates
     }
 
     /// Get candidates for a cell

@@ -246,10 +246,10 @@ pub struct GameState {
     current_hint: Option<Hint>,
     /// Hint detail level (Summary vs ProofDetail)
     hint_detail: HintDetailLevel,
-    /// Undo stack
-    undo_stack: Vec<(Position, Option<u8>)>,
-    /// Redo stack
-    redo_stack: Vec<(Position, Option<u8>)>,
+    /// Undo stack (position, old value, old candidates)
+    undo_stack: Vec<(Position, Option<u8>, BitSet)>,
+    /// Redo stack (position, old value, old candidates)
+    redo_stack: Vec<(Position, Option<u8>, BitSet)>,
     /// Animation frame counter
     frame: u32,
     /// Win screen animation
@@ -930,14 +930,15 @@ impl GameState {
             }
         }
 
-        // Save for undo
+        // Save for undo (including current candidates so they can be restored)
         let old_value = self.grid.get(self.cursor);
-        self.undo_stack.push((self.cursor, old_value));
+        let old_candidates = self.grid.cell(self.cursor).candidates();
+        self.undo_stack.push((self.cursor, old_value, old_candidates));
         self.redo_stack.clear();
 
-        // Set the value
+        // Set the value and remove it from peer candidates
         self.grid.set_cell_unchecked(self.cursor, Some(value));
-        self.grid.recalculate_candidates();
+        self.grid.update_candidates_after_move(self.cursor, value);
 
         // Log the move
         self.log_move(self.cursor, MoveAction::Place(value));
@@ -950,11 +951,11 @@ impl GameState {
         }
 
         let old_value = self.grid.get(self.cursor);
-        self.undo_stack.push((self.cursor, old_value));
+        let old_candidates = self.grid.cell(self.cursor).candidates();
+        self.undo_stack.push((self.cursor, old_value, old_candidates));
         self.redo_stack.clear();
 
         self.grid.set_cell_unchecked(self.cursor, None);
-        self.grid.recalculate_candidates();
 
         // Log the clear (old_value is always Some here due to guard above)
         if let Some(v) = old_value {
@@ -987,7 +988,7 @@ impl GameState {
         if cell.is_given() || cell.is_filled() {
             return;
         }
-        let valid = self.grid.get_candidates(self.cursor);
+        let valid = self.grid.compute_candidates(self.cursor);
         self.grid.cell_mut(self.cursor).set_candidates(valid);
 
         self.show_message("Filled valid notes");
@@ -1006,11 +1007,20 @@ impl GameState {
     }
 
     fn undo(&mut self) -> bool {
-        if let Some((pos, old_value)) = self.undo_stack.pop() {
+        if let Some((pos, old_value, old_candidates)) = self.undo_stack.pop() {
             let current_value = self.grid.get(pos);
-            self.redo_stack.push((pos, current_value));
+            let current_candidates = self.grid.cell(pos).candidates();
+            self.redo_stack.push((pos, current_value, current_candidates));
+
             self.grid.set_cell_unchecked(pos, old_value);
-            self.grid.recalculate_candidates();
+            // Restore the cell's own candidates from before the move
+            if old_value.is_none() {
+                self.grid.cell_mut(pos).set_candidates(old_candidates);
+            }
+            // If restoring a value, remove it from peer candidates
+            if let Some(v) = old_value {
+                self.grid.update_candidates_after_move(pos, v);
+            }
 
             self.log_move(pos, MoveAction::Undo(old_value));
             true
@@ -1020,11 +1030,20 @@ impl GameState {
     }
 
     fn redo(&mut self) -> bool {
-        if let Some((pos, value)) = self.redo_stack.pop() {
+        if let Some((pos, value, saved_candidates)) = self.redo_stack.pop() {
             let current_value = self.grid.get(pos);
-            self.undo_stack.push((pos, current_value));
+            let current_candidates = self.grid.cell(pos).candidates();
+            self.undo_stack.push((pos, current_value, current_candidates));
+
             self.grid.set_cell_unchecked(pos, value);
-            self.grid.recalculate_candidates();
+            // Restore the cell's candidates from the redo snapshot
+            if value.is_none() {
+                self.grid.cell_mut(pos).set_candidates(saved_candidates);
+            }
+            // If placing a value, remove it from peer candidates
+            if let Some(v) = value {
+                self.grid.update_candidates_after_move(pos, v);
+            }
 
             self.log_move(pos, MoveAction::Redo(value));
             true
@@ -1166,12 +1185,12 @@ impl GameState {
         }
     }
 
-    /// Get ghost candidates for a cell (valid candidates not yet noted)
+    /// Get ghost candidates for a cell (valid candidates computed from grid state)
     pub fn get_ghost_candidates(&self, pos: Position) -> Vec<u8> {
         if self.grid.cell(pos).is_filled() || self.grid.cell(pos).is_given() {
             return Vec::new();
         }
-        self.grid.get_candidates(pos).iter().collect()
+        self.grid.compute_candidates(pos).iter().collect()
     }
 
     /// Check if a cell has only one valid candidate (naked single)
@@ -1179,7 +1198,7 @@ impl GameState {
         if self.grid.cell(pos).is_filled() || self.grid.cell(pos).is_given() {
             return false;
         }
-        self.grid.get_candidates(pos).count() == 1
+        self.grid.compute_candidates(pos).count() == 1
     }
 
     pub fn is_complete(&self) -> bool {
