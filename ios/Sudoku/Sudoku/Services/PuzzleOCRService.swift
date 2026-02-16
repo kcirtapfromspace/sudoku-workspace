@@ -112,7 +112,7 @@ final class PuzzleOCRService {
         let ext = corrected.extent
         guard ext.width > 0, ext.height > 0 else { return 0 }
         let translated = corrected.transformed(by: CGAffineTransform(translationX: -ext.origin.x, y: -ext.origin.y))
-        let scaled = translated.transformed(by: CGAffineTransform(scaleX: CGFloat(sz) / ext.width, scaleY: CGFloat(sz) / ext.height))
+        let scaled = translated.transformed(by: CGAffineTransform(scaleX: CGFloat(sz) / ext.width, y: CGFloat(sz) / ext.height))
 
         guard let cgImage = context.createCGImage(scaled, from: CGRect(x: 0, y: 0, width: sz, height: sz)),
               let dp = cgImage.dataProvider,

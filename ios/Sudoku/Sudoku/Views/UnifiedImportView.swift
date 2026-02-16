@@ -482,7 +482,7 @@ final class UnifiedCameraController: UIViewController,
             guard let self = self else { return }
             defer { self.isProcessingGrid = false }
 
-            if let error = error {
+            if error != nil {
                 self.resetGridTracking()
                 return
             }
