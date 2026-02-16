@@ -11,6 +11,20 @@ The solving engine implements techniques documented by these invaluable communit
 - **[SudokuWiki](https://www.sudokuwiki.org/)** by Andrew Stuart — detailed technique tutorials and interactive demonstrations that informed many implementations.
 - **J.F. Crook** — "A Pencil-and-Paper Algorithm for Solving Sudoku Puzzles" (2009), the formal foundation for candidate elimination.
 
+## Community & Taxonomy
+
+The solving engine's technique taxonomy and terminology conventions draw on decades of
+community research:
+
+- **StrmCkr** and the **[Enjoy Sudoku Players Forum](http://forum.enjoysudoku.com/)** —
+  canonical definitions of strong link (XOR) vs weak inference (NAND), ALS degree-of-freedom
+  framework, fish sector constraint taxonomy (Basic/Franken/Mutant), and wing classification
+  (W/M/S/L/H naming via strong-link-type patterns VVV, VLV, LVL, etc.).
+- **[Sudopedia](http://sudopedia.enjoysudoku.com/)** — community wiki documenting technique
+  definitions and their historical evolution.
+- **[r/sudoku](https://www.reddit.com/r/sudoku/)** — ongoing community review and validation
+  of technique implementations.
+
 ## Rust Dependencies
 
 ### Core Engine (`sudoku-core`)
