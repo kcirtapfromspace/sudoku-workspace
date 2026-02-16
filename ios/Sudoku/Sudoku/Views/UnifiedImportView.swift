@@ -38,7 +38,6 @@ struct UnifiedImportView: View {
                 onQRCodeScanned: handleQRCode,
                 onPhotoCaptured: { image in
                     onImageCaptured(image)
-                    dismiss()
                 },
                 onError: { message in
                     errorMessage = message

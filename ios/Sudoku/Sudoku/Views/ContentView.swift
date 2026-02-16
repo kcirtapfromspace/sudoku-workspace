@@ -76,6 +76,7 @@ struct MenuView: View {
     @State private var showingImport = false
     @State private var capturedImage: UIImage?
     @State private var showingConfirmation = false
+    @State private var pendingImageCapture = false
 
     var body: some View {
         NavigationStack {
@@ -175,7 +176,12 @@ struct MenuView: View {
             .sheet(isPresented: $showingProgress) {
                 ProgressHubView()
             }
-            .fullScreenCover(isPresented: $showingImport) {
+            .fullScreenCover(isPresented: $showingImport, onDismiss: {
+                if pendingImageCapture {
+                    pendingImageCapture = false
+                    showingConfirmation = true
+                }
+            }) {
                 UnifiedImportView(
                     onPuzzleFound: { puzzleString in
                         showingImport = false
@@ -183,10 +189,8 @@ struct MenuView: View {
                     },
                     onImageCaptured: { image in
                         capturedImage = image
+                        pendingImageCapture = true
                         showingImport = false
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                            showingConfirmation = true
-                        }
                     }
                 )
             }
