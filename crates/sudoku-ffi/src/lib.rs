@@ -177,6 +177,8 @@ pub struct CellState {
     pub has_conflict: bool,
 }
 
+type UndoEntry = (usize, usize, Option<u8>, BitSet);
+
 /// The main Sudoku game interface for mobile platforms
 #[derive(uniffi::Object)]
 pub struct SudokuGame {
@@ -184,8 +186,8 @@ pub struct SudokuGame {
     solution: Mutex<Grid>,
     difficulty: Mutex<Difficulty>,
     rated_difficulty: Mutex<Difficulty>,
-    undo_stack: Mutex<Vec<(usize, usize, Option<u8>, BitSet)>>,
-    redo_stack: Mutex<Vec<(usize, usize, Option<u8>, BitSet)>>,
+    undo_stack: Mutex<Vec<UndoEntry>>,
+    redo_stack: Mutex<Vec<UndoEntry>>,
     hints_used: Mutex<usize>,
     mistakes: Mutex<usize>,
     seed: Mutex<Option<u64>>,

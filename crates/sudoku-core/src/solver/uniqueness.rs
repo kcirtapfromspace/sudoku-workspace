@@ -148,9 +148,7 @@ pub fn find_unique_rectangle(fab: &CandidateFabric) -> Option<Finding> {
     for i in 0..bivalues.len() {
         let (c1, a, b) = bivalues[i];
 
-        for j in (i + 1)..bivalues.len() {
-            let (c2, c, d) = bivalues[j];
-
+        for &(c2, c, d) in &bivalues[(i + 1)..] {
             if !((a == c && b == d) || (a == d && b == c)) {
                 continue;
             }
@@ -525,11 +523,7 @@ fn try_ur_hint(
                 let strong_col3 = fab.sector_digit_cells[9 + c3_col][di].count_ones() == 2;
                 let strong_col4 = fab.sector_digit_cells[9 + c4_col][di].count_ones() == 2;
 
-                if (strong_row3 && strong_col4)
-                    || (strong_col3 && strong_row4)
-                    || (strong_row3 && strong_row4)
-                    || (strong_col3 && strong_col4)
-                {
+                if (strong_row3 || strong_col3) && (strong_row4 || strong_col4) {
                     if cand3.contains(other) && cand3.count() > 2 {
                         return Some(Finding {
                             technique: Technique::UniqueRectangle,

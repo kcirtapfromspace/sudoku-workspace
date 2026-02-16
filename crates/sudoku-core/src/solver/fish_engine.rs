@@ -243,6 +243,7 @@ fn classify_fish(size: usize, has_fins: bool, constraint: SectorConstraint) -> T
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn make_fish_finding(
     fab: &CandidateFabric,
     digit: u8,
@@ -539,7 +540,7 @@ pub fn find_pointing_pair(fab: &CandidateFabric) -> Option<Finding> {
             let base = SECTOR_BOX_BASE + box_idx;
             let base_mask = sector_candidate_mask(fab, base, digit);
             let base_count = base_mask.count_ones();
-            if base_count < 2 || base_count > 3 {
+            if !(2..=3).contains(&base_count) {
                 continue;
             }
 
@@ -596,7 +597,7 @@ pub fn find_box_line_reduction(fab: &CandidateFabric) -> Option<Finding> {
         for line in 0..18usize {
             let base_mask = sector_candidate_mask(fab, line, digit);
             let base_count = base_mask.count_ones();
-            if base_count < 2 || base_count > 3 {
+            if !(2..=3).contains(&base_count) {
                 continue;
             }
 

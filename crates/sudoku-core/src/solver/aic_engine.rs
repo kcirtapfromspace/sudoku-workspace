@@ -92,12 +92,9 @@ fn weak_inferences(fab: &CandidateFabric, node: Node) -> Vec<Node> {
         let di = (digit - 1) as usize;
         let mask = fab.sector_digit_cells[sector][di];
         let sec_cells = sector_cells(sector);
-        for i in 0..9 {
-            if mask & (1 << i) != 0 {
-                let c = sec_cells[i];
-                if c != cell {
-                    result.push((c, digit));
-                }
+        for (i, &c) in sec_cells.iter().enumerate() {
+            if mask & (1 << i) != 0 && c != cell {
+                result.push((c, digit));
             }
         }
     }
@@ -721,8 +718,8 @@ pub fn find_medusa(fab: &CandidateFabric, graph: &LinkGraph) -> Option<Finding> 
                 // Follow strong links only for coloring
                 if let Some(neighbors) = graph.strong.get(&node) {
                     for &next in neighbors {
-                        if !color.contains_key(&next) {
-                            color.insert(next, opp);
+                        if let std::collections::hash_map::Entry::Vacant(e) = color.entry(next) {
+                            e.insert(opp);
                             queue.push_back((next, opp));
                         }
                     }
@@ -1278,7 +1275,7 @@ fn find_common_placement(
                             Technique::DynamicForcingChain => "Dynamic Forcing Chain".into(),
                             _ => "Forcing Chain".into(),
                         },
-                        source_cell: source_cell,
+                        source_cell,
                     },
                     proof: Some(proof),
                 });
@@ -1334,7 +1331,7 @@ fn find_common_elimination(
                             Technique::DynamicForcingChain => "Dynamic Forcing Chain".into(),
                             _ => "Forcing Chain".into(),
                         },
-                        source_cell: source_cell,
+                        source_cell,
                     },
                     proof: Some(proof),
                 });

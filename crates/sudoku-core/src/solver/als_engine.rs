@@ -71,10 +71,10 @@ fn enumerate_als(fab: &CandidateFabric) -> Vec<Als> {
                 // Extract the cells from this subset
                 let mut cells = Vec::with_capacity(n);
                 let mut union = BitSet::empty();
-                for bit in 0..empty.len() {
+                for (bit, &empty_cell) in empty.iter().enumerate() {
                     if set & (1 << bit) != 0 {
-                        cells.push(empty[bit]);
-                        union = union.union(&fab.cell_cands[empty[bit]]);
+                        cells.push(empty_cell);
+                        union = union.union(&fab.cell_cands[empty_cell]);
                     }
                 }
 

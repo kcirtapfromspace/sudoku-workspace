@@ -132,7 +132,9 @@ pub enum ExplanationData {
     LockedSet {
         kind: &'static str, // "Naked" or "Hidden"
         size: usize,
+        #[allow(dead_code)]
         cells: Vec<usize>,
+        #[allow(dead_code)]
         values: Vec<u8>,
         sector_name: String,
     },
@@ -162,6 +164,7 @@ pub enum ExplanationData {
     Chain {
         variant: String,
         chain_length: usize,
+        #[allow(dead_code)]
         values: Vec<u8>,
     },
     /// Uniqueness-based pattern
@@ -171,6 +174,7 @@ pub enum ExplanationData {
     /// Backtracking (last resort)
     Backtracking { cell: usize, value: u8 },
     /// Generic explanation string (for techniques being ported)
+    #[allow(dead_code)]
     Raw(String),
 }
 

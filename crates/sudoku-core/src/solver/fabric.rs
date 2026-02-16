@@ -52,6 +52,7 @@ pub fn idx_to_pos(idx: usize) -> Position {
 
 /// Convert Position to linear cell index
 #[inline]
+#[allow(dead_code)]
 pub fn pos_to_idx(pos: Position) -> usize {
     cell_index(pos.row, pos.col)
 }
@@ -72,8 +73,8 @@ pub fn sector_cells(sector: usize) -> [usize; 9] {
         let box_row = (box_idx / 3) * 3;
         let box_col = (box_idx % 3) * 3;
         let mut cells = [0usize; 9];
-        for i in 0..9 {
-            cells[i] = cell_index(box_row + i / 3, box_col + i % 3);
+        for (i, cell) in cells.iter_mut().enumerate() {
+            *cell = cell_index(box_row + i / 3, box_col + i % 3);
         }
         cells
     }
@@ -186,18 +187,21 @@ impl CandidateFabric {
     }
 
     /// Get all empty cell indices
+    #[allow(dead_code)]
     pub fn empty_cells(&self) -> Vec<usize> {
         (0..81).filter(|&i| self.values[i].is_none()).collect()
     }
 
     /// Get the number of candidates for a cell
     #[inline]
+    #[allow(dead_code)]
     pub fn cand_count(&self, idx: usize) -> u32 {
         self.cell_cands[idx].count()
     }
 
     /// Check if cell has candidate
     #[inline]
+    #[allow(dead_code)]
     pub fn has_cand(&self, idx: usize, digit: u8) -> bool {
         self.cell_cands[idx].contains(digit)
     }
@@ -208,9 +212,9 @@ impl CandidateFabric {
         let mask = self.sector_digit_cells[sector][di];
         let cells = sector_cells(sector);
         let mut result = Vec::new();
-        for i in 0..9 {
+        for (i, &cell) in cells.iter().enumerate() {
             if mask & (1u16 << i) != 0 {
-                result.push(cells[i]);
+                result.push(cell);
             }
         }
         result
@@ -223,6 +227,7 @@ impl CandidateFabric {
     }
 
     /// Get all cells that see both a and b (intersection of their peer sets)
+    #[allow(dead_code)]
     pub fn common_peers(&self, a: usize, b: usize) -> Vec<usize> {
         let mut result = Vec::new();
         for &peer_a in &self.peers[a] {
@@ -257,7 +262,7 @@ fn sector_cell_position(sector: usize, idx: usize) -> usize {
 // 1. Cell Space:      81 positions → placed values / emptiness
 // 2. Candidate Space: ≤729 (cell, digit) pairs → Boolean candidate membership
 // 3. Sector Space:    27 houses → cell memberships, peer relationships
-// 4. Link Space:      Binary relations between candidates (strong/weak links)
+// 4. Link Space:      Binary relations between candidates (strong links / weak inferences)
 //
 // Link Space is represented by `LinkGraph` in aic_engine.rs (built on demand).
 
@@ -265,6 +270,7 @@ fn sector_cell_position(sector: usize, idx: usize) -> usize {
 ///
 /// This is the "what is known" space — each cell is either filled (given or
 /// deduced) or empty. Singles operate purely in this space.
+#[allow(dead_code)]
 pub struct CellSpaceView<'a> {
     pub values: &'a [Option<u8>; 81],
     pub is_given: &'a [bool; 81],
@@ -276,6 +282,7 @@ pub struct CellSpaceView<'a> {
 /// Each empty cell has a BitSet of candidate digits. The sector-digit index
 /// provides O(1) lookup of "which cells in sector S can hold digit d?".
 /// Fish and ALS engines primarily operate in this space.
+#[allow(dead_code)]
 pub struct CandidateSpaceView<'a> {
     pub cell_cands: &'a [BitSet; 81],
     pub sector_digit_cells: &'a [[u16; 9]; 27],
@@ -287,11 +294,13 @@ pub struct CandidateSpaceView<'a> {
 /// Each cell belongs to exactly 3 sectors. The peer array gives the 20 cells
 /// visible from each position. This is the structural backbone connecting
 /// Cell Space to Candidate Space.
+#[allow(dead_code)]
 pub struct SectorSpaceView<'a> {
     pub cell_sectors: &'a [[usize; 3]; 81],
     pub peers: &'a [[u8; 20]; 81],
 }
 
+#[allow(dead_code)]
 impl CandidateFabric {
     /// View into Cell Space: placed values and emptiness.
     pub fn cell_space(&self) -> CellSpaceView<'_> {
