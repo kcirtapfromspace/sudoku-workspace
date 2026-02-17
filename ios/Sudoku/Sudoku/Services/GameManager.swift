@@ -176,6 +176,35 @@ class GameManager: ObservableObject {
         GameHistoryManager.shared.recordPuzzleStart(puzzleString: fingerprint, difficulty: rated)
     }
 
+    /// Load an imported puzzle with optional player progress (from camera OCR)
+    func loadImportedPuzzle(_ data: ImportedPuzzleData) {
+        guard let game = gameFromString(puzzle: data.givensString) else { return }
+        let rated = Difficulty.from(game.getRatedDifficulty())
+        let viewModel = GameViewModel(cachedGame: game, difficulty: rated)
+
+        if settings.autoFillCandidates && !data.isContinuing {
+            viewModel.fillAllCandidates()
+        } else if !data.isContinuing {
+            viewModel.clearAllCandidates()
+        }
+
+        if data.isContinuing {
+            for move in data.playerMoves {
+                viewModel.applyImportedMove(row: move.index / 9, col: move.index % 9, value: move.digit)
+            }
+            for note in data.playerNotes {
+                viewModel.applyImportedNotes(row: note.index / 9, col: note.index % 9, notes: note.notes)
+            }
+        }
+
+        currentGame = viewModel
+        gameState = .playing
+        saveCurrentGame()
+
+        let fingerprint = viewModel.getPuzzleFingerprint()
+        GameHistoryManager.shared.recordPuzzleStart(puzzleString: fingerprint, difficulty: rated)
+    }
+
     func resumeGame() {
         guard currentGame != nil else { return }
         gameState = .playing

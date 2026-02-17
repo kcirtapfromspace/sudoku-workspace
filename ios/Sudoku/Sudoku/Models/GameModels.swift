@@ -70,6 +70,15 @@ enum Difficulty: String, CaseIterable, Identifiable, Codable {
     }
 }
 
+// MARK: - Imported Puzzle Data
+
+struct ImportedPuzzleData {
+    let givensString: String                       // 81-char string with only given digits
+    let playerMoves: [(index: Int, digit: Int)]    // Player-filled cells to replay
+    let playerNotes: [(index: Int, notes: Set<Int>)] // Pencil marks to restore
+    let isContinuing: Bool                         // true = "Continue Puzzle", false = "Start Fresh"
+}
+
 // MARK: - Cell Model
 
 struct CellModel: Identifiable, Equatable {

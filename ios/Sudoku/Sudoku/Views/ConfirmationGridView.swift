@@ -57,23 +57,65 @@ struct ConfirmationGridView: View {
         let digit = viewModel.digits[index]
         let isSelected = viewModel.selectedCell == index
         let isLow = viewModel.isLowConfidence(at: index)
+        let classification = viewModel.classifications[index]
+        let cellNotes = viewModel.notes[index]
+        let showNotes = viewModel.importMode == .continuePuzzle
 
         ZStack {
             // Background
             Rectangle()
                 .fill(cellBackground(isSelected: isSelected, isLow: isLow))
 
-            // Digit
             if digit != 0 {
+                // Main digit with classification-based styling
                 Text("\(digit)")
-                    .font(.system(size: size * 0.55, weight: .medium, design: .rounded))
-                    .foregroundStyle(isLow ? .orange : .primary)
+                    .font(.system(size: size * 0.55, weight: digitWeight(classification), design: .rounded))
+                    .foregroundStyle(digitColor(classification: classification, isLow: isLow))
+            } else if showNotes && !cellNotes.isEmpty {
+                // Notes: 3x3 mini-grid
+                notesView(notes: cellNotes, size: size)
             }
         }
         .frame(width: size, height: size)
         .contentShape(Rectangle())
         .onTapGesture {
             viewModel.selectCell(at: index)
+        }
+    }
+
+    private func digitWeight(_ classification: CellClassification) -> Font.Weight {
+        switch classification {
+        case .given, .ambiguous: return .bold
+        case .playerFilled: return .medium
+        case .empty: return .medium
+        }
+    }
+
+    private func digitColor(classification: CellClassification, isLow: Bool) -> Color {
+        if isLow { return .orange }
+        switch classification {
+        case .playerFilled: return .blue
+        case .given, .ambiguous, .empty: return .primary
+        }
+    }
+
+    /// 3x3 mini-grid showing detected pencil marks
+    private func notesView(notes: Set<Int>, size: CGFloat) -> some View {
+        let noteSize = size / 3.0
+        let fontSize = size * 0.16
+
+        return VStack(spacing: 0) {
+            ForEach(0..<3, id: \.self) { row in
+                HStack(spacing: 0) {
+                    ForEach(0..<3, id: \.self) { col in
+                        let digit = row * 3 + col + 1
+                        Text(notes.contains(digit) ? "\(digit)" : " ")
+                            .font(.system(size: fontSize, weight: .regular, design: .rounded))
+                            .foregroundStyle(.secondary)
+                            .frame(width: noteSize, height: noteSize)
+                    }
+                }
+            }
         }
     }
 

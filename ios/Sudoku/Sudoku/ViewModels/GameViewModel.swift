@@ -472,6 +472,25 @@ class GameViewModel: ObservableObject {
         syncFromEngine()
     }
 
+    // MARK: - Imported Puzzle Support
+
+    func applyImportedMove(row: Int, col: Int, value: Int) {
+        let result = game.makeMove(row: UInt8(row), col: UInt8(col), value: UInt8(value))
+        if case .success = result { syncFromEngine() }
+        else if case .complete = result { syncFromEngine() }
+    }
+
+    func applyImportedNotes(row: Int, col: Int, notes: Set<Int>) {
+        userCandidates[row][col] = notes
+        showCandidates = true
+        refreshCells()
+    }
+
+    /// Refresh cell display without a full engine sync (used for notes-only updates)
+    private func refreshCells() {
+        syncFromEngine()
+    }
+
     // MARK: - Undo/Redo
 
     func undo() {

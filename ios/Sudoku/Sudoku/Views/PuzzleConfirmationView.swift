@@ -5,7 +5,7 @@ struct PuzzleConfirmationView: View {
     @StateObject private var viewModel = PuzzleConfirmationViewModel()
     @Environment(\.dismiss) private var dismiss
     let image: UIImage
-    let onPlay: (String) -> Void
+    let onPlay: (ImportedPuzzleData) -> Void
 
     var body: some View {
         NavigationStack {
@@ -43,6 +43,17 @@ struct PuzzleConfirmationView: View {
                     }
                     .padding(.horizontal)
 
+                    // Import mode picker (only shown when player progress detected)
+                    if viewModel.hasPlayerProgress {
+                        Picker("Import Mode", selection: $viewModel.importMode) {
+                            ForEach(ImportMode.allCases, id: \.self) { mode in
+                                Text(mode.rawValue).tag(mode)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                        .padding(.horizontal)
+                    }
+
                     // Editable grid
                     ConfirmationGridView(viewModel: viewModel)
                         .padding(.horizontal)
@@ -68,10 +79,11 @@ struct PuzzleConfirmationView: View {
                         .controlSize(.large)
 
                         Button {
-                            onPlay(viewModel.puzzleString)
+                            let data = viewModel.buildImportData()
+                            onPlay(data)
                             dismiss()
                         } label: {
-                            Label("Play", systemImage: "play.fill")
+                            Label(playButtonLabel, systemImage: "play.fill")
                                 .frame(maxWidth: .infinity)
                         }
                         .buttonStyle(.borderedProminent)
@@ -93,6 +105,13 @@ struct PuzzleConfirmationView: View {
         .onAppear {
             viewModel.processImage(image)
         }
+    }
+
+    private var playButtonLabel: String {
+        if viewModel.hasPlayerProgress && viewModel.importMode == .continuePuzzle {
+            return "Continue Puzzle"
+        }
+        return "Play"
     }
 
     @ViewBuilder

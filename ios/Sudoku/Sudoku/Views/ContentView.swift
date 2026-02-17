@@ -196,9 +196,9 @@ struct MenuView: View {
             }
             .sheet(isPresented: $showingConfirmation) {
                 if let image = capturedImage {
-                    PuzzleConfirmationView(image: image) { puzzleString in
+                    PuzzleConfirmationView(image: image) { importData in
                         showingConfirmation = false
-                        gameManager.loadSharedPuzzle(puzzleString)
+                        gameManager.loadImportedPuzzle(importData)
                     }
                 }
             }
