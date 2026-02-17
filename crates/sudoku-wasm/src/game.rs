@@ -363,8 +363,7 @@ impl GameState {
         let puzzle_grid = Grid::from_string(puzzle)?;
         let solver = Solver::new();
         let solution = solver.solve(&puzzle_grid)?;
-        let difficulty = solver.rate_difficulty(&puzzle_grid);
-        let se_rating = solver.rate_se(&puzzle_grid);
+        let (difficulty, se_rating) = solver.analyze(&puzzle_grid);
 
         let mut grid = puzzle_grid.deep_clone();
         grid.clear_all_candidates();
@@ -443,6 +442,54 @@ impl GameState {
             player_stats: PlayerStats::default(),
             game_recorded: false,
             seed: Some(seed),
+            konami_progress: 0,
+            secrets_unlocked: false,
+            se_rating,
+            move_log: Vec::new(),
+            move_seq: 0,
+        })
+    }
+
+    /// Create a game from pre-generated data (puzzle_string + solution + se_rating + difficulty).
+    /// Skips both solve() and rate — instant.
+    pub fn from_pregenerated(
+        puzzle_string: &str,
+        solution_string: &str,
+        difficulty: Difficulty,
+        se_rating: f32,
+    ) -> Option<Self> {
+        let puzzle = Grid::from_string(puzzle_string)?;
+        let solution = Grid::from_string(solution_string)?;
+
+        let mut grid = puzzle.deep_clone();
+        grid.clear_all_candidates();
+
+        Some(Self {
+            grid,
+            puzzle,
+            solution,
+            difficulty,
+            cursor: Position::new(4, 4),
+            mode: InputMode::Normal,
+            screen: ScreenState::Playing,
+            start_time: Self::now(),
+            paused_elapsed: 0.0,
+            mistakes: 0,
+            hints_used: 0,
+            message: None,
+            message_timer: 0,
+            current_hint: None,
+            hint_detail: HintDetailLevel::Summary,
+            undo_stack: Vec::new(),
+            redo_stack: Vec::new(),
+            frame: 0,
+            win_screen: None,
+            lose_screen: None,
+            show_ghost_hints: false,
+            show_valid_cells: false,
+            player_stats: PlayerStats::default(),
+            game_recorded: false,
+            seed: None,
             konami_progress: 0,
             secrets_unlocked: false,
             se_rating,

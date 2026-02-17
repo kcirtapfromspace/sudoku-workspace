@@ -3,7 +3,7 @@
 //! This crate provides a browser-based Sudoku game that looks and feels
 //! like the terminal UI version.
 
-use sudoku_core::Difficulty;
+use sudoku_core::{Difficulty, PuzzleId, Solver};
 use wasm_bindgen::prelude::*;
 use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement, HtmlElement, KeyboardEvent};
 
@@ -124,18 +124,7 @@ impl SudokuGame {
     /// Start a new game with specified difficulty
     #[wasm_bindgen]
     pub fn new_game(&mut self, difficulty: &str) {
-        let diff = match difficulty {
-            "beginner" => Difficulty::Beginner,
-            "easy" => Difficulty::Easy,
-            "medium" => Difficulty::Medium,
-            "intermediate" => Difficulty::Intermediate,
-            "hard" => Difficulty::Hard,
-            "expert" => Difficulty::Expert,
-            "master" => Difficulty::Master,
-            "extreme" => Difficulty::Extreme,
-            _ => Difficulty::Medium,
-        };
-        self.state = GameState::new(diff);
+        self.state = GameState::new(parse_difficulty(difficulty));
         self.render();
     }
 
@@ -297,6 +286,36 @@ impl SudokuGame {
         self.state.set_secrets_unlocked(unlocked);
     }
 
+    /// Load a pre-generated puzzle from JSON, skipping solve/rating. Returns true on success.
+    /// JSON must contain: puzzle_string, solution_string, difficulty, se_rating
+    #[wasm_bindgen]
+    pub fn load_pregenerated(&mut self, json: &str) -> bool {
+        let Ok(val) = serde_json::from_str::<serde_json::Value>(json) else {
+            return false;
+        };
+        let Some(puzzle_str) = val["puzzle_string"].as_str() else { return false };
+        let Some(solution_str) = val["solution_string"].as_str() else { return false };
+        let difficulty_str = val["difficulty"].as_str().unwrap_or("medium");
+        let se_rating = val["se_rating"].as_f64().unwrap_or(0.0) as f32;
+
+        let diff = parse_difficulty(difficulty_str);
+
+        if let Some(mut new_state) =
+            GameState::from_pregenerated(puzzle_str, solution_str, diff, se_rating)
+        {
+            // Preserve player stats and secrets
+            new_state.load_stats_json(&self.state.stats_json());
+            if self.state.secrets_unlocked() {
+                new_state.set_secrets_unlocked(true);
+            }
+            self.state = new_state;
+            self.render();
+            true
+        } else {
+            false
+        }
+    }
+
     /// Toggle pause
     #[wasm_bindgen]
     pub fn toggle_pause(&mut self) {
@@ -379,4 +398,38 @@ impl SudokuGame {
             self.font_size,
         );
     }
+}
+
+fn parse_difficulty(s: &str) -> Difficulty {
+    match s {
+        "beginner" => Difficulty::Beginner,
+        "easy" => Difficulty::Easy,
+        "medium" => Difficulty::Medium,
+        "intermediate" => Difficulty::Intermediate,
+        "hard" => Difficulty::Hard,
+        "expert" => Difficulty::Expert,
+        "master" => Difficulty::Master,
+        "extreme" => Difficulty::Extreme,
+        _ => Difficulty::Medium,
+    }
+}
+
+/// Generate a puzzle in the background (no canvas required).
+/// Returns JSON: {puzzle_string, solution_string, difficulty, se_rating, short_code}
+#[wasm_bindgen]
+pub fn generate_puzzle_json(difficulty: &str) -> String {
+    let diff = parse_difficulty(difficulty);
+    let puzzle_id = PuzzleId::random(diff);
+    let puzzle = puzzle_id.generate();
+    let solver = Solver::new();
+    let solution = solver.solve(&puzzle).expect("generated puzzle should be solvable");
+    let (rated_difficulty, se_rating) = solver.analyze(&puzzle);
+    serde_json::json!({
+        "puzzle_string": puzzle.to_string(),
+        "solution_string": solution.to_string(),
+        "difficulty": format!("{}", rated_difficulty),
+        "se_rating": se_rating,
+        "short_code": puzzle_id.to_short_code(),
+    })
+    .to_string()
 }
