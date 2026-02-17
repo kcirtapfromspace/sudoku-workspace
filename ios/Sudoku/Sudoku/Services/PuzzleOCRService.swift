@@ -34,14 +34,34 @@ final class PuzzleOCRService {
     private static let confidenceThreshold: Float = 0.5
     private let ciContext = CIContext()
 
+    /// Serial queue for heavy Vision work — keeps it off the cooperative thread pool
+    /// to avoid deadlocking Swift concurrency.
+    private static let ocrQueue = DispatchQueue(label: "com.ukodus.ocr", qos: .userInitiated)
+
     /// Process a photo of a Sudoku puzzle and extract the digit grid.
     func recognizePuzzle(from image: UIImage) async throws -> OCRResult {
         guard let ciImage = CIImage(image: image) else {
             throw OCRError.invalidImage
         }
 
+        // Run all synchronous Vision work on a dedicated queue to avoid
+        // starving Swift's cooperative thread pool.
+        return try await withCheckedThrowingContinuation { continuation in
+            Self.ocrQueue.async { [self] in
+                do {
+                    let result = try self.recognizePuzzleSync(ciImage: ciImage)
+                    continuation.resume(returning: result)
+                } catch {
+                    continuation.resume(throwing: error)
+                }
+            }
+        }
+    }
+
+    /// Synchronous OCR pipeline — must be called off the main thread.
+    private func recognizePuzzleSync(ciImage: CIImage) throws -> OCRResult {
         // Step 1: Detect the grid rectangle
-        let gridRect = try await detectGrid(in: ciImage)
+        let gridRect = try detectGridSync(in: ciImage)
 
         // Step 2: Perspective-correct to a square
         let corrected = try perspectiveCorrect(ciImage, to: gridRect)
@@ -51,10 +71,10 @@ final class PuzzleOCRService {
         let fullCells = extractCells(from: corrected, insetFraction: 0.03)
 
         // Step 4: Recognize digit in each cell + classify color
-        let digitResults = try await recognizeDigits(in: centerCells, fullCellImages: fullCells)
+        let digitResults = try recognizeDigits(in: centerCells, fullCellImages: fullCells)
 
         // Step 5: Detect notes in empty cells
-        let cells = try await detectNotes(digitResults: digitResults, fullCells: fullCells)
+        let cells = try detectNotes(digitResults: digitResults, fullCells: fullCells)
 
         // Step 6: Assemble results
         let hasProgress = cells.contains { $0.classification == .playerFilled || !$0.notes.isEmpty }
@@ -71,15 +91,15 @@ final class PuzzleOCRService {
 
     // MARK: - Step 1: Grid Detection
 
-    private func detectGrid(in image: CIImage) async throws -> VNRectangleObservation {
+    private func detectGridSync(in image: CIImage) throws -> VNRectangleObservation {
         // Primary attempt
-        if let result = try await detectGridPrimary(in: image) {
+        if let result = try detectGridPrimary(in: image) {
             return result
         }
 
         // Enhanced retry: boost contrast and sharpen for thin pixel-based lines (screen photos)
         let enhanced = enhanceForGridDetection(image)
-        if let result = try await detectGridEnhanced(in: enhanced, originalImage: image) {
+        if let result = try detectGridEnhanced(in: enhanced, originalImage: image) {
             return result
         }
 
@@ -312,16 +332,16 @@ final class PuzzleOCRService {
 
     // MARK: - Step 4: Digit Recognition + Color Classification
 
-    private func recognizeDigits(in centerCells: [CIImage], fullCellImages: [CIImage]) async throws -> [CellOCRResult] {
+    private func recognizeDigits(in centerCells: [CIImage], fullCellImages: [CIImage]) throws -> [CellOCRResult] {
         var results: [CellOCRResult] = []
         results.reserveCapacity(81)
 
         for (index, cellImage) in centerCells.enumerated() {
-            var result = try await recognizeSingleDigit(in: cellImage, level: .fast)
+            var result = try recognizeSingleDigit(in: cellImage, level: .fast)
 
             // If fast recognition has low confidence, retry with accurate
             if result.confidence < Self.confidenceThreshold && result.digit != 0 {
-                result = try await recognizeSingleDigit(in: cellImage, level: .accurate)
+                result = try recognizeSingleDigit(in: cellImage, level: .accurate)
             }
 
             // Classify color for cells with a recognized digit
@@ -446,7 +466,7 @@ final class PuzzleOCRService {
 
     /// For cells where digit == 0, attempt to detect pencil marks by dividing the
     /// cell into a 3x3 sub-grid and running OCR on each sub-region.
-    private func detectNotes(digitResults: [CellOCRResult], fullCells: [CIImage]) async throws -> [CellOCRResult] {
+    private func detectNotes(digitResults: [CellOCRResult], fullCells: [CIImage]) throws -> [CellOCRResult] {
         var results = digitResults
 
         // Collect indices of empty cells that need notes detection
@@ -459,25 +479,11 @@ final class PuzzleOCRService {
 
         guard !emptyIndices.isEmpty else { return results }
 
-        // Process empty cells in parallel using TaskGroup
-        let notesResults: [(Int, Set<Int>)] = try await withThrowingTaskGroup(of: (Int, Set<Int>).self) { group in
-            for idx in emptyIndices {
-                let cellImage = fullCells[idx]
-                group.addTask {
-                    let notes = try self.detectNotesInCell(cellImage)
-                    return (idx, notes)
-                }
-            }
-
-            var collected: [(Int, Set<Int>)] = []
-            for try await result in group {
-                collected.append(result)
-            }
-            return collected
-        }
-
-        // Merge notes into results
-        for (idx, notes) in notesResults {
+        // Process empty cells sequentially on the OCR queue (already off main thread).
+        // Previously used withThrowingTaskGroup which spawned 40+ blocking Vision tasks,
+        // starving Swift's cooperative thread pool and causing a deadlock.
+        for idx in emptyIndices {
+            let notes = try detectNotesInCell(fullCells[idx])
             if !notes.isEmpty {
                 let orig = results[idx]
                 results[idx] = CellOCRResult(
