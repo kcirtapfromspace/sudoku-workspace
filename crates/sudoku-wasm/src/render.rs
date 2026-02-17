@@ -255,6 +255,9 @@ pub fn render_game(
             render_grid(ctx, state, theme, grid_x, grid_y, cell_size, font_size);
             render_stats_screen(ctx, state, theme, width, height, font_size);
         }
+        ScreenState::Loading => {
+            render_loading_screen(ctx, state, theme, width, height, font_size);
+        }
     }
 
     // Render message if present
@@ -578,6 +581,28 @@ fn render_info_panel(
 }
 
 /// Render pause overlay
+fn render_loading_screen(
+    ctx: &CanvasRenderingContext2d,
+    state: &GameState,
+    theme: &Theme,
+    width: u32,
+    height: u32,
+    font_size: f64,
+) {
+    let _ = state; // may use for animated dots later
+    ctx.set_fill_style_str(&theme.background.as_css());
+    ctx.fill_rect(0.0, 0.0, width as f64, height as f64);
+
+    ctx.set_font(&format!(
+        "bold {}px 'JetBrains Mono', monospace",
+        font_size * 1.6
+    ));
+    ctx.set_fill_style_str(&theme.message_text.as_css());
+    ctx.set_text_align("center");
+    ctx.set_text_baseline("middle");
+    let _ = ctx.fill_text("Generating puzzle...", width as f64 / 2.0, height as f64 / 2.0);
+}
+
 fn render_pause_overlay(
     ctx: &CanvasRenderingContext2d,
     theme: &Theme,

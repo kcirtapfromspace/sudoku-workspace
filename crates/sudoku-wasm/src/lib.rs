@@ -286,6 +286,24 @@ impl SudokuGame {
         self.state.set_secrets_unlocked(unlocked);
     }
 
+    /// Get the current screen state (Playing, Paused, Win, Lose, Menu, Stats, Loading)
+    #[wasm_bindgen]
+    pub fn screen_state(&self) -> String {
+        format!("{:?}", self.state.screen())
+    }
+
+    /// Take the pending new-game difficulty (if any). Returns the difficulty string
+    /// or empty string if no new game is pending.
+    /// The host should generate a puzzle for this difficulty and call load_pregenerated(),
+    /// or fall back to new_game() for synchronous generation.
+    #[wasm_bindgen]
+    pub fn take_pending_difficulty(&mut self) -> String {
+        match self.state.take_pending_new_game() {
+            Some(d) => format!("{}", d),
+            None => String::new(),
+        }
+    }
+
     /// Load a pre-generated puzzle from JSON, skipping solve/rating. Returns true on success.
     /// JSON must contain: puzzle_string, solution_string, difficulty, se_rating
     #[wasm_bindgen]
@@ -401,7 +419,7 @@ impl SudokuGame {
 }
 
 fn parse_difficulty(s: &str) -> Difficulty {
-    match s {
+    match s.to_ascii_lowercase().as_str() {
         "beginner" => Difficulty::Beginner,
         "easy" => Difficulty::Easy,
         "medium" => Difficulty::Medium,

@@ -65,6 +65,7 @@ pub enum ScreenState {
     Lose,
     Menu,
     Stats,
+    Loading,
 }
 
 /// Player statistics for lifetime tracking
@@ -279,6 +280,8 @@ pub struct GameState {
     move_log: Vec<MoveLogEntry>,
     /// Next sequence number for move log
     move_seq: u32,
+    /// Deferred new-game request (difficulty the host should generate asynchronously)
+    pending_new_game: Option<Difficulty>,
 }
 
 /// Konami code sequence: Up Up Down Down Left Right Left Right B A
@@ -307,7 +310,7 @@ impl GameState {
 
         let solver = Solver::new();
         let solution = solver.solve(&puzzle).expect("Puzzle should be solvable");
-        let se_rating = solver.rate_se(&puzzle);
+        let (_, se_rating) = solver.analyze(&puzzle);
 
         Self {
             grid,
@@ -340,6 +343,7 @@ impl GameState {
             se_rating,
             move_log: Vec::new(),
             move_seq: 0,
+            pending_new_game: None,
         }
     }
 
@@ -399,6 +403,7 @@ impl GameState {
             se_rating,
             move_log: Vec::new(),
             move_seq: 0,
+            pending_new_game: None,
         })
     }
 
@@ -411,7 +416,7 @@ impl GameState {
 
         let solver = Solver::new();
         let solution = solver.solve(&puzzle)?;
-        let se_rating = solver.rate_se(&puzzle);
+        let (_, se_rating) = solver.analyze(&puzzle);
 
         let mut grid = puzzle.deep_clone();
         grid.clear_all_candidates();
@@ -447,6 +452,7 @@ impl GameState {
             se_rating,
             move_log: Vec::new(),
             move_seq: 0,
+            pending_new_game: None,
         })
     }
 
@@ -495,6 +501,7 @@ impl GameState {
             se_rating,
             move_log: Vec::new(),
             move_seq: 0,
+            pending_new_game: None,
         })
     }
 
@@ -627,6 +634,7 @@ impl GameState {
             ScreenState::Menu => self.handle_menu_key(key),
             ScreenState::Stats => self.handle_stats_key(key),
             ScreenState::Playing => self.handle_playing_key(key, shift, ctrl),
+            ScreenState::Loading => true, // ignore input while loading
         }
     }
 
@@ -639,69 +647,15 @@ impl GameState {
         match key {
             "q" | "Q" | "Escape" => return false,
             "s" | "S" => self.screen = ScreenState::Stats,
-            "n" | "N" | "Enter" | " " => {
-                *self = GameState::new_preserving(
-                    self.difficulty,
-                    self.player_stats.clone(),
-                    self.secrets_unlocked,
-                );
-            }
-            "1" => {
-                *self = GameState::new_preserving(
-                    Difficulty::Beginner,
-                    self.player_stats.clone(),
-                    self.secrets_unlocked,
-                )
-            }
-            "2" => {
-                *self = GameState::new_preserving(
-                    Difficulty::Easy,
-                    self.player_stats.clone(),
-                    self.secrets_unlocked,
-                )
-            }
-            "3" => {
-                *self = GameState::new_preserving(
-                    Difficulty::Medium,
-                    self.player_stats.clone(),
-                    self.secrets_unlocked,
-                )
-            }
-            "4" => {
-                *self = GameState::new_preserving(
-                    Difficulty::Intermediate,
-                    self.player_stats.clone(),
-                    self.secrets_unlocked,
-                )
-            }
-            "5" => {
-                *self = GameState::new_preserving(
-                    Difficulty::Hard,
-                    self.player_stats.clone(),
-                    self.secrets_unlocked,
-                )
-            }
-            "6" => {
-                *self = GameState::new_preserving(
-                    Difficulty::Expert,
-                    self.player_stats.clone(),
-                    self.secrets_unlocked,
-                )
-            }
-            "7" if self.secrets_unlocked => {
-                *self = GameState::new_preserving(
-                    Difficulty::Master,
-                    self.player_stats.clone(),
-                    self.secrets_unlocked,
-                )
-            }
-            "8" if self.secrets_unlocked => {
-                *self = GameState::new_preserving(
-                    Difficulty::Extreme,
-                    self.player_stats.clone(),
-                    self.secrets_unlocked,
-                )
-            }
+            "n" | "N" | "Enter" | " " => self.request_new_game(self.difficulty),
+            "1" => self.request_new_game(Difficulty::Beginner),
+            "2" => self.request_new_game(Difficulty::Easy),
+            "3" => self.request_new_game(Difficulty::Medium),
+            "4" => self.request_new_game(Difficulty::Intermediate),
+            "5" => self.request_new_game(Difficulty::Hard),
+            "6" => self.request_new_game(Difficulty::Expert),
+            "7" if self.secrets_unlocked => self.request_new_game(Difficulty::Master),
+            "8" if self.secrets_unlocked => self.request_new_game(Difficulty::Extreme),
             _ => {}
         }
         true
@@ -729,62 +683,14 @@ impl GameState {
         match key {
             "Escape" => self.screen = ScreenState::Playing,
             "s" => self.screen = ScreenState::Stats,
-            "1" => {
-                *self = GameState::new_preserving(
-                    Difficulty::Beginner,
-                    self.player_stats.clone(),
-                    self.secrets_unlocked,
-                )
-            }
-            "2" => {
-                *self = GameState::new_preserving(
-                    Difficulty::Easy,
-                    self.player_stats.clone(),
-                    self.secrets_unlocked,
-                )
-            }
-            "3" => {
-                *self = GameState::new_preserving(
-                    Difficulty::Medium,
-                    self.player_stats.clone(),
-                    self.secrets_unlocked,
-                )
-            }
-            "4" => {
-                *self = GameState::new_preserving(
-                    Difficulty::Intermediate,
-                    self.player_stats.clone(),
-                    self.secrets_unlocked,
-                )
-            }
-            "5" => {
-                *self = GameState::new_preserving(
-                    Difficulty::Hard,
-                    self.player_stats.clone(),
-                    self.secrets_unlocked,
-                )
-            }
-            "6" => {
-                *self = GameState::new_preserving(
-                    Difficulty::Expert,
-                    self.player_stats.clone(),
-                    self.secrets_unlocked,
-                )
-            }
-            "7" if self.secrets_unlocked => {
-                *self = GameState::new_preserving(
-                    Difficulty::Master,
-                    self.player_stats.clone(),
-                    self.secrets_unlocked,
-                )
-            }
-            "8" if self.secrets_unlocked => {
-                *self = GameState::new_preserving(
-                    Difficulty::Extreme,
-                    self.player_stats.clone(),
-                    self.secrets_unlocked,
-                )
-            }
+            "1" => self.request_new_game(Difficulty::Beginner),
+            "2" => self.request_new_game(Difficulty::Easy),
+            "3" => self.request_new_game(Difficulty::Medium),
+            "4" => self.request_new_game(Difficulty::Intermediate),
+            "5" => self.request_new_game(Difficulty::Hard),
+            "6" => self.request_new_game(Difficulty::Expert),
+            "7" if self.secrets_unlocked => self.request_new_game(Difficulty::Master),
+            "8" if self.secrets_unlocked => self.request_new_game(Difficulty::Extreme),
             _ => {}
         }
         true
@@ -1174,6 +1080,19 @@ impl GameState {
     pub fn se_rating(&self) -> f32 {
         self.se_rating
     }
+
+    /// Set a deferred new-game request and show the loading screen.
+    /// The host (JS/Swift) should poll `take_pending_new_game()` and provide puzzle data.
+    fn request_new_game(&mut self, difficulty: Difficulty) {
+        self.pending_new_game = Some(difficulty);
+        self.screen = ScreenState::Loading;
+    }
+
+    /// Take (and clear) the pending new-game difficulty, if any.
+    pub fn take_pending_new_game(&mut self) -> Option<Difficulty> {
+        self.pending_new_game.take()
+    }
+
     pub fn mistakes(&self) -> usize {
         self.mistakes
     }
@@ -1427,6 +1346,7 @@ impl GameState {
             se_rating: 0.0,
             move_log: Vec::new(),
             move_seq: 0,
+            pending_new_game: None,
         }
     }
 
