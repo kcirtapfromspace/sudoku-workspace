@@ -4,7 +4,7 @@
 
 ## Overview
 
-Ukodus ("the App") is a Sudoku puzzle game developed by Patrick Deutsch. It is available as a web app at [ukodus.com](https://ukodus.com/play/), as an iOS app, and as a terminal (TUI) app. This privacy policy explains what data we collect across all platforms and how we use it.
+Ukodus ("the App") is a Sudoku puzzle game developed by Patrick Deutsch. It is available as a web app at [ukodus.now](https://ukodus.now/play/), as an iOS app, and as a terminal (TUI) app. This privacy policy explains what data we collect across all platforms and how we use it.
 
 ## Local Data Storage
 
@@ -52,7 +52,7 @@ The following fields are sent upon game completion:
 
 Each platform generates a random UUID the first time you play. This ID is **not tied to your identity** in any way -- it exists solely to associate your results on the leaderboard and Galaxy visualization.
 
-- **Web (ukodus.com):** Stored in the browser's `localStorage`
+- **Web (ukodus.now):** Stored in the browser's `localStorage`
 - **iOS:** Stored in `UserDefaults`
 - **TUI:** Stored in a file in your local data directory
 
@@ -120,7 +120,7 @@ There is currently no in-app mechanism to disable telemetry submission. If this 
 ## Data Deletion
 
 You can delete your local data at any time by:
-- **Web:** Clearing your browser's localStorage for ukodus.com
+- **Web:** Clearing your browser's localStorage for ukodus.now
 - **iOS:** Deleting the App from your device, or using the "Reset Statistics" option in Settings
 - **TUI:** Deleting the stats and player ID files from your local data directory
 
