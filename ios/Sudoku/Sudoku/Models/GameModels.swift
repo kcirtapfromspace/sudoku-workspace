@@ -262,6 +262,7 @@ struct GameSettings: Codable {
     var autoFillCandidates: Bool = false  // Start games with notes pre-filled
     var celebrationsEnabled: Bool = true  // Show celebrations for completions
     var showErrorsImmediately: Bool = true  // Show wrong answers immediately vs check on submit
+    var cameraImportEnabled: Bool = false
 
     enum ThemeSetting: String, Codable, CaseIterable {
         case system = "System"

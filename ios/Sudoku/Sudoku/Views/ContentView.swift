@@ -134,17 +134,19 @@ struct MenuView: View {
                     }
                     .accessibilityIdentifier("Progress")
 
-                    Button {
-                        showingImport = true
-                    } label: {
-                        VStack {
-                            Image(systemName: "camera.fill")
-                                .font(.title2)
-                            Text("Import")
-                                .font(.caption)
+                    if gameManager.settings.cameraImportEnabled {
+                        Button {
+                            showingImport = true
+                        } label: {
+                            VStack {
+                                Image(systemName: "camera.fill")
+                                    .font(.title2)
+                                Text("Import")
+                                    .font(.caption)
+                            }
                         }
+                        .accessibilityIdentifier("Import")
                     }
-                    .accessibilityIdentifier("Import")
 
                     Button {
                         showingSettings = true

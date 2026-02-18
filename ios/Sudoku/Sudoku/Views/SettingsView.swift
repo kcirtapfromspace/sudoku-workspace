@@ -51,6 +51,11 @@ struct SettingsView: View {
                     Toggle("Celebrations", isOn: $gameManager.settings.celebrationsEnabled)
                 }
 
+                // Experimental
+                Section("Experimental") {
+                    Toggle("Camera Import", isOn: $gameManager.settings.cameraImportEnabled)
+                }
+
                 // Data
                 Section {
                     Button(role: .destructive) {

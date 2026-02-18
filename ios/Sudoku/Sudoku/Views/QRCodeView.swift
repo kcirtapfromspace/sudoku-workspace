@@ -12,11 +12,11 @@ struct QRCodeView: View {
         self.shortCode = shortCode
     }
 
-    private var shareCode: String {
+    private var shareUrl: String {
         if let code = shortCode {
-            return code
+            return "https://ukodus.now/play/?s=\(code)"
         }
-        return puzzleString
+        return "https://ukodus.now/play/?p=\(puzzleString)"
     }
 
     var body: some View {
@@ -25,7 +25,7 @@ struct QRCodeView: View {
                 Text("Share This Puzzle")
                     .font(.title2.bold())
 
-                if let image = generateQRCode(from: shareCode) {
+                if let image = generateQRCode(from: shareUrl) {
                     Image(uiImage: image)
                         .interpolation(.none)
                         .resizable()
@@ -41,7 +41,7 @@ struct QRCodeView: View {
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
 
-                ShareLink(item: shareCode) {
+                ShareLink(item: shareUrl) {
                     Label("Share Code", systemImage: "square.and.arrow.up")
                         .frame(maxWidth: .infinity)
                 }
@@ -50,7 +50,7 @@ struct QRCodeView: View {
                 .padding(.horizontal, 40)
 
                 Button {
-                    UIPasteboard.general.string = shareCode
+                    UIPasteboard.general.string = shareUrl
                 } label: {
                     Label("Copy Code", systemImage: "doc.on.doc")
                         .frame(maxWidth: .infinity)
