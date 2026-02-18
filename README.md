@@ -39,7 +39,7 @@ python3 serve.py 8080
 
 Then open `http://127.0.0.1:8080/`.
 
-Live at [ukodus.com/play](https://ukodus.com/play/).
+Live at [ukodus.now/play](https://ukodus.now/play/).
 
 ### iOS
 
@@ -62,4 +62,4 @@ At a high level:
 
 The `PuzzleId` system ([`puzzle_id.rs`](https://github.com/kcirtapfromspace/sudoku-core/blob/main/src/puzzle_id.rs)) encodes puzzle parameters into short alphanumeric codes, enabling deterministic regeneration and shareable puzzle links.
 
-The iOS app uses this same generator through the Rust FFI layer (`crates/sudoku-ffi`), and stores the solved grid alongside the puzzle so it can power hints and validation. The WASM build powers [ukodus.com/play](https://ukodus.com/play/) and includes an anti-cheat move log that records timestamped actions for leaderboard verification.
+The iOS app uses this same generator through the Rust FFI layer (`crates/sudoku-ffi`), and stores the solved grid alongside the puzzle so it can power hints and validation. The WASM build powers [ukodus.now/play](https://ukodus.now/play/) and includes an anti-cheat move log that records timestamped actions for leaderboard verification.
