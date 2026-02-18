@@ -442,10 +442,12 @@ pub fn generate_puzzle_json(difficulty: &str) -> String {
     let solver = Solver::new();
     let solution = solver.solve(&puzzle).expect("generated puzzle should be solvable");
     let (rated_difficulty, se_rating) = solver.analyze(&puzzle);
+    let puzzle_string = puzzle.to_string_compact();
+    let solution_string = solution.to_string_compact();
     serde_json::json!({
-        "puzzle_hash": canonical_puzzle_hash_str(&puzzle.to_string()),
-        "puzzle_string": puzzle.to_string(),
-        "solution_string": solution.to_string(),
+        "puzzle_hash": canonical_puzzle_hash_str(&puzzle_string),
+        "puzzle_string": puzzle_string,
+        "solution_string": solution_string,
         "difficulty": format!("{}", rated_difficulty),
         "se_rating": se_rating,
         "short_code": puzzle_id.to_short_code(),
