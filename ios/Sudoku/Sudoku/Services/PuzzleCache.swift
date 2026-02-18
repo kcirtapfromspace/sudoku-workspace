@@ -34,7 +34,19 @@ actor PuzzleCache {
             return cached
         }
 
-        // No cached puzzle, generate one now
+        // For Hard+ difficulties, try fetching a pre-mined puzzle from the API.
+        // This is much faster than local generation for these expensive difficulties.
+        if PuzzleAPIService.eligibleDifficulties.contains(difficulty) {
+            if let apiPuzzle = await PuzzleAPIService.shared.fetchPuzzle(difficulty: difficulty) {
+                // Start local generation in background as a cache warm-up
+                Task {
+                    await ensureCached(difficulty: difficulty)
+                }
+                return apiPuzzle
+            }
+        }
+
+        // No cached puzzle and API unavailable — generate one now
         return await generatePuzzle(difficulty: difficulty)
     }
 
@@ -47,6 +59,15 @@ actor PuzzleCache {
         }
 
         generatingDifficulties.insert(difficulty)
+
+        // For Hard+ difficulties, try the API first for cache warm-up too
+        if PuzzleAPIService.eligibleDifficulties.contains(difficulty),
+           let apiPuzzle = await PuzzleAPIService.shared.fetchPuzzle(difficulty: difficulty) {
+            cache[difficulty] = apiPuzzle
+            generatingDifficulties.remove(difficulty)
+            return
+        }
+
         let puzzle = await generatePuzzle(difficulty: difficulty)
         cache[difficulty] = puzzle
         generatingDifficulties.remove(difficulty)

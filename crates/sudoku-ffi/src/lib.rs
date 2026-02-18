@@ -192,6 +192,7 @@ pub struct SudokuGame {
     mistakes: Mutex<usize>,
     seed: Mutex<Option<u64>>,
     last_hint: Mutex<Option<Hint>>,
+    se_rating_cache: Mutex<Option<f32>>,
 }
 
 #[uniffi::export]
@@ -220,6 +221,7 @@ impl SudokuGame {
             mistakes: Mutex::new(0),
             seed: Mutex::new(Some(puzzle_id.seed)),
             last_hint: Mutex::new(None),
+            se_rating_cache: Mutex::new(None),
         })
     }
 
@@ -246,6 +248,7 @@ impl SudokuGame {
             mistakes: Mutex::new(0),
             seed: Mutex::new(None),
             last_hint: Mutex::new(None),
+            se_rating_cache: Mutex::new(None),
         })
     }
 
@@ -501,9 +504,14 @@ impl SudokuGame {
 
     /// Get the Sudoku Explainer (SE) numerical rating for this puzzle
     pub fn get_se_rating(&self) -> f32 {
+        if let Some(cached) = *self.se_rating_cache.lock().unwrap() {
+            return cached;
+        }
         let grid = self.grid.lock().unwrap();
         let solver = Solver::new();
-        solver.rate_se(&grid)
+        let rating = solver.rate_se(&grid);
+        *self.se_rating_cache.lock().unwrap() = Some(rating);
+        rating
     }
 
     /// Get the number of hints used
@@ -974,6 +982,7 @@ pub fn game_from_string(puzzle: String) -> Option<Arc<SudokuGame>> {
         mistakes: Mutex::new(0),
         seed: Mutex::new(None),
         last_hint: Mutex::new(None),
+        se_rating_cache: Mutex::new(None),
     }))
 }
 
@@ -997,6 +1006,7 @@ pub fn game_from_short_code(code: String) -> Option<Arc<SudokuGame>> {
         mistakes: Mutex::new(0),
         seed: Mutex::new(Some(puzzle_id.seed)),
         last_hint: Mutex::new(None),
+        se_rating_cache: Mutex::new(None),
     }))
 }
 
@@ -1013,6 +1023,34 @@ fn parse_difficulty(s: &str) -> Difficulty {
         "Extreme" => Difficulty::Extreme,
         _ => Difficulty::Medium,
     }
+}
+
+/// Create a game from pre-generated puzzle and solution strings, skipping all
+/// expensive generation, solving, and rating. Used for API-fetched puzzles.
+#[uniffi::export]
+pub fn game_from_pregenerated(
+    puzzle_string: String,
+    solution_string: String,
+    difficulty: String,
+    se_rating: f32,
+) -> Option<Arc<SudokuGame>> {
+    let grid = Grid::from_string(&puzzle_string)?;
+    let solution = Grid::from_string(&solution_string)?;
+    let diff = parse_difficulty(&difficulty);
+
+    Some(Arc::new(SudokuGame {
+        grid: Mutex::new(grid),
+        solution: Mutex::new(solution),
+        difficulty: Mutex::new(diff),
+        rated_difficulty: Mutex::new(diff),
+        undo_stack: Mutex::new(Vec::new()),
+        redo_stack: Mutex::new(Vec::new()),
+        hints_used: Mutex::new(0),
+        mistakes: Mutex::new(0),
+        seed: Mutex::new(None),
+        last_hint: Mutex::new(None),
+        se_rating_cache: Mutex::new(Some(se_rating)),
+    }))
 }
 
 /// Compute SHA-256 hash of an 81-character puzzle string (canonical `.` format).
@@ -1058,5 +1096,6 @@ pub fn game_deserialize(json: String) -> Option<Arc<SudokuGame>> {
         mistakes: Mutex::new(mistakes),
         seed: Mutex::new(None),
         last_hint: Mutex::new(None),
+        se_rating_cache: Mutex::new(None),
     }))
 }

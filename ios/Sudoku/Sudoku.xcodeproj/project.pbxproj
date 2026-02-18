@@ -16,6 +16,7 @@
 		20BF373D007D303C7EBB7BE7 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = E2B8111C142D1E948BAC29F9 /* Assets.xcassets */; };
 		24C83EF57C69F2E8557BD8C7 /* GameHistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6250D7B32A775F934DF31B82 /* GameHistoryView.swift */; };
 		2C6528C1F6B245F937841280 /* GridView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C655A4BF5C47359EC66D564 /* GridView.swift */; };
+		2E54FCBBD232B8058DDB5E50 /* PuzzleAPIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9EB72FC1E191D58BD05A52C2 /* PuzzleAPIService.swift */; };
 		4A55DC4712D6EFF887C323B2 /* ConfirmationGridView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19E18CB6390B97F267041882 /* ConfirmationGridView.swift */; };
 		4CECE306A043227CB3C8D756 /* GameHistoryManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E48F51C8F39E07F64BDBCBE /* GameHistoryManager.swift */; };
 		5474199DD268AB4DF3A6D1A6 /* GameView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B98B31F0CE963EC1CD01AA8D /* GameView.swift */; };
@@ -87,6 +88,7 @@
 		884BBAF962528512E969732E /* PuzzleConfirmationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PuzzleConfirmationView.swift; sourceTree = "<group>"; };
 		89C7EADCED9EFA430F577D76 /* SudokuTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = SudokuTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		997BD907DDD5E510FC44939E /* SudokuEngineFFI.modulemap */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.module-map"; path = SudokuEngineFFI.modulemap; sourceTree = "<group>"; };
+		9EB72FC1E191D58BD05A52C2 /* PuzzleAPIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PuzzleAPIService.swift; sourceTree = "<group>"; };
 		A6F0F7156D2B8BACBBF4F52B /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		B10EFCC2D4094740940E40BA /* WinScreenView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WinScreenView.swift; sourceTree = "<group>"; };
 		B778D4F8E525013FE40E3C47 /* GameManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameManager.swift; sourceTree = "<group>"; };
@@ -126,7 +128,6 @@
 				3B899CF657A96412F1220E34 /* PrivacyInfo.xcprivacy */,
 				2154759A451DEA32F598DBF8 /* Sudoku.entitlements */,
 				FE1F7E4A124E1E6523353A9A /* SudokuApp.swift */,
-				C0796EFEE3D7DB5AE0591E8F /* Extensions */,
 				D7AC3FA665D9157224EA9AB3 /* Generated */,
 				7CDDE169D18B52660B5FF4EE /* Models */,
 				C453D22C6AAE0DBB2A3C9F09 /* Resources */,
@@ -172,18 +173,12 @@
 				D7B70116407782179275FE99 /* GameCenterManager.swift */,
 				4E48F51C8F39E07F64BDBCBE /* GameHistoryManager.swift */,
 				B778D4F8E525013FE40E3C47 /* GameManager.swift */,
+				9EB72FC1E191D58BD05A52C2 /* PuzzleAPIService.swift */,
 				6699671B041E2B1C69B1DE3D /* PuzzleCache.swift */,
 				60A1440F516DF4C90A8D92B5 /* PuzzleOCRService.swift */,
 				EFD3050349B68125AEFB99C5 /* TelemetryService.swift */,
 			);
 			path = Services;
-			sourceTree = "<group>";
-		};
-		C0796EFEE3D7DB5AE0591E8F /* Extensions */ = {
-			isa = PBXGroup;
-			children = (
-			);
-			path = Extensions;
 			sourceTree = "<group>";
 		};
 		C453D22C6AAE0DBB2A3C9F09 /* Resources */ = {
@@ -387,6 +382,7 @@
 				2C6528C1F6B245F937841280 /* GridView.swift in Sources */,
 				089359C4D2B805E077C674C7 /* LoseScreenView.swift in Sources */,
 				FFDAC89D9AE5F86EA0F1B996 /* NumberPadView.swift in Sources */,
+				2E54FCBBD232B8058DDB5E50 /* PuzzleAPIService.swift in Sources */,
 				E3D566CB81AA0EC9502D4FAA /* PuzzleCache.swift in Sources */,
 				0D2D087A2A8F79BE2C130AAD /* PuzzleConfirmationView.swift in Sources */,
 				6801F860AA8E413641BEEFF8 /* PuzzleConfirmationViewModel.swift in Sources */,
@@ -609,7 +605,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 202602161632;
+				CURRENT_PROJECT_VERSION = 1;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = 67C7724279;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -676,7 +672,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 202602161632;
+				CURRENT_PROJECT_VERSION = 1;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = 67C7724279;
 				ENABLE_NS_ASSERTIONS = NO;

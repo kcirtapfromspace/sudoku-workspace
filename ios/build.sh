@@ -87,8 +87,9 @@ mkdir -p "$SUDOKU_DIR/Sudoku/Generated"
     --out-dir "$SUDOKU_DIR/Sudoku/Generated"
 
 # Copy header and modulemap to Frameworks
+# Modulemap must be named module.modulemap for Swift to discover it via SWIFT_INCLUDE_PATHS
 cp "$SUDOKU_DIR/Sudoku/Generated/SudokuEngineFFI.h" "$FRAMEWORK_DIR/"
-cp "$SUDOKU_DIR/Sudoku/Generated/SudokuEngineFFI.modulemap" "$FRAMEWORK_DIR/"
+cp "$SUDOKU_DIR/Sudoku/Generated/SudokuEngineFFI.modulemap" "$FRAMEWORK_DIR/module.modulemap"
 
 echo ""
 echo "5. Libraries built at:"
